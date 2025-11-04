@@ -1,10 +1,9 @@
 package sweetie.evaware;
 
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 public class Listener<T> implements Comparable<Listener<T>> {
-    private static final AtomicLong counter = new AtomicLong(0);
+    private static int counter = 0;
 
     private final int priority;
     private final Consumer<T> handler;
@@ -13,7 +12,7 @@ public class Listener<T> implements Comparable<Listener<T>> {
     public Listener(int priority, Consumer<T> handler) {
         this.priority = priority;
         this.handler = handler;
-        this.id = counter.getAndIncrement();
+        this.id = counter++;
     }
 
     public Listener(Consumer<T> handler) {
