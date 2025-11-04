@@ -1,5 +1,7 @@
 package sweetie.evaware.interfaces;
 
-public interface Cacheable {
-    void refresh();
+import sweetie.evaware.Listener;
+
+public interface Cacheable<T> {
+    Listener<T>[] getCache();
 }

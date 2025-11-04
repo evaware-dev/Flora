@@ -1,3 +1,5 @@
+package polygone;
+
 import sweetie.evaware.Event;
 import sweetie.evaware.EventListener;
 import sweetie.evaware.Listener;
@@ -5,7 +7,7 @@ import sweetie.evaware.Listener;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Main {
+public class BusExample {
     public static class MeowEvent extends Event<MeowEvent> {
         public static final MeowEvent BUS = new MeowEvent();
     }
