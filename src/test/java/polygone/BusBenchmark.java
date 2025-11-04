@@ -48,16 +48,17 @@ public class BusBenchmark {
     }
 
     @Benchmark
-    @OperationsPerInvocation(10000)  // Точно EVENTS событий за iter
     public void floraBenchmark(FloraState state) {
-        state.bus.notify(new MeowEvent());
+        for (int i = 0; i < EVENTS; i++) {
+            state.bus.notify(new MeowEvent());
+        }
     }
 
     public static class MeowEvent { }
 
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
-                .include(BusBenchmark.class.getSimpleName() + ".*Benchmark")
+                .include(BusBenchmark.class.getSimpleName())
                 .build();
         new Runner(opt).run();
     }
