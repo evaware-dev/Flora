@@ -17,9 +17,11 @@ public abstract class Flora<T> implements Cacheable<T>, Subscribable<Listener<T>
     @Override
     @SuppressWarnings("unchecked")
     public Listener<T>[] getCache() {
-        if (rebuildCache) {
-            cache = listeners.toArray(Listener[]::new);
-            rebuildCache = false;
+        synchronized (this) {
+            if (rebuildCache) {
+                cache = listeners.toArray(Listener[]::new);
+                rebuildCache = false;
+            }
         }
         return cache;
     }
@@ -27,20 +29,26 @@ public abstract class Flora<T> implements Cacheable<T>, Subscribable<Listener<T>
     @Override
     public EventListener subscribe(Listener<T> listener) {
         listeners.add(listener);
-        rebuildCache = true;
+        synchronized (this) { rebuildCache = true; }
         return new EventListener(() -> unsubscribe(listener));
     }
 
     @Override
     public void unsubscribe(Listener<T> listener) {
         if (listeners.remove(listener))
-            rebuildCache = true;
+            synchronized (this) { rebuildCache = true; }
     }
 
     @Override
     public void notify(T event) {
-        for (Listener<T> tListener : getCache()) {
-            tListener.getHandler().accept(event);
+        Listener<T>[] listeners = getCache();
+
+        for (Listener<T> listener : listeners) {
+            try {
+                listener.getHandler().accept(event);
+            } catch (Exception e) {
+                System.err.println("Error in event listener: " + e.getMessage());
+            }
         }
     }
 }

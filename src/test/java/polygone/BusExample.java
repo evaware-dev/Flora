@@ -16,7 +16,7 @@ public class BusExample {
 
     public static void main(String[] args) {
         int events = 1_000_000;
-        int listeners = 400;
+        int listeners = 100;
         int runs = 25;
 
         double totalTimeMs = 0.0;
