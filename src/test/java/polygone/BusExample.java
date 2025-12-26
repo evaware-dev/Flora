@@ -10,6 +10,8 @@ import java.util.List;
 public class BusExample {
     public static class MeowEvent extends Event<MeowEvent> {
         public static final MeowEvent BUS = new MeowEvent();
+
+        public int counter = 0;
     }
 
     private static final List<EventListener> listenersList = new ArrayList<>();
@@ -17,10 +19,15 @@ public class BusExample {
     public static void main(String[] args) {
         int events = 1_000_000;
         int listeners = 100;
-        int runs = 25;
+        int runs = 15;
 
         double totalTimeMs = 0.0;
-        double totalNsPerOp = 0.0;
+
+        System.out.println("Warming up...");
+        benchmark(events, listeners);
+        benchmark(events, listeners);
+
+        System.out.println("Starting benchmark...");
 
         for (int runIndex = 0; runIndex < runs; runIndex++) {
             double[] results = benchmark(events, listeners);
@@ -28,28 +35,27 @@ public class BusExample {
             double nsPerOp = results[1];
 
             System.out.printf(
-                    "Run %2d: completed %,d events & %,d listeners in %.3f ms, (ns/op): %.6f%n",
-                    (runIndex + 1), events, listeners, durationMs, nsPerOp
+                    "Run %2d: %.3f ms, (ns/op): %.6f%n",
+                    (runIndex + 1), durationMs, nsPerOp
             );
 
             totalTimeMs += durationMs;
-            totalNsPerOp += nsPerOp;
         }
 
-        double avgTimeMs = totalTimeMs / runs;
-        double avgNsPerOp = totalNsPerOp / runs;
-
         System.out.printf(
-                "%nAverage over %d runs: %.3f ms total, %.6f ns/op%n",
-                runs, avgTimeMs, avgNsPerOp
+                "%nAverage: %.3f ms total%n",
+                totalTimeMs / runs
         );
     }
 
     private static double[] benchmark(int events, int listeners) {
         listenersList.clear();
+        MeowEvent.BUS.counter = 0;
 
         for (int i = 0; i < listeners; i++) {
-            Listener<MeowEvent> listener = new Listener<>(event -> {});
+            Listener<MeowEvent> listener = new Listener<>(event -> {
+                event.counter++;
+            });
             listenersList.add(MeowEvent.BUS.subscribe(listener));
         }
 
@@ -60,6 +66,10 @@ public class BusExample {
         }
 
         long elapsedNs = System.nanoTime() - start;
+
+        if (MeowEvent.BUS.counter != events * listeners) {
+            throw new RuntimeException("Math broken! JIT cheating???");
+        }
 
         listenersList.forEach(EventListener::unsubscribe);
         listenersList.clear();
