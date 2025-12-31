@@ -7,25 +7,35 @@ public class Listener<T> implements Comparable<Listener<T>> {
     private static final AtomicInteger counter = new AtomicInteger(0);
 
     private final int priority;
+    private final boolean async;
     private final Consumer<T> handler;
     private final int id;
 
-    public Listener(int priority, Consumer<T> handler) {
+    public Listener(int priority, boolean async, Consumer<T> handler) {
         this.priority = priority;
+        this.async = async;
         this.handler = handler;
         this.id = counter.getAndIncrement();
     }
 
-    public Listener(Consumer<T> handler) {
-        this(0, handler);
+    public Listener(int priority, Consumer<T> handler) {
+        this(priority, false, handler);
     }
 
-    public int getPriority() {
-        return priority;
+    public Listener(Consumer<T> handler) {
+        this(0, false, handler);
     }
 
     public Consumer<T> getHandler() {
         return handler;
+    }
+
+    public boolean isAsync() {
+        return async;
+    }
+
+    public int getPriority() {
+        return priority;
     }
 
     @Override

@@ -1,28 +1,36 @@
 package sweetie.evaware;
 
-import sweetie.evaware.interfaces.Cacheable;
-import sweetie.evaware.interfaces.Notifiable;
-import sweetie.evaware.interfaces.Subscribable;
+import sweetie.evaware.interfaces.*;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ForkJoinPool;
 import java.util.function.Consumer;
 
 public abstract class Flora<T> implements Cacheable<T>, Subscribable<Listener<T>, T>, Notifiable<T> {
     private final ConcurrentSkipListSet<Listener<T>> listeners = new ConcurrentSkipListSet<>();
     private final Object writeLock = new Object();
 
-    @SuppressWarnings("unchecked")
-    private volatile Consumer<T>[] cache = (Consumer<T>[]) new Consumer<?>[0];
+    @SuppressWarnings("unchecked") private volatile Consumer<T>[] syncCache = (Consumer<T>[]) new Consumer[0];
+    @SuppressWarnings("unchecked") private volatile Consumer<T>[] asyncCache = (Consumer<T>[]) new Consumer[0];
 
     @Override
     @SuppressWarnings("unchecked")
     public void rebuildCache() {
-        Consumer<T>[] tempCache = new Consumer[listeners.size()];
-        int i = 0;
+        List<Consumer<T>> syncList = new ArrayList<>();
+        List<Consumer<T>> asyncList = new ArrayList<>();
+
         for (Listener<T> listener : listeners) {
-            tempCache[i++] = listener.getHandler();
+            if (listener.isAsync()) {
+                asyncList.add(listener.getHandler());
+            } else {
+                syncList.add(listener.getHandler());
+            }
         }
-        this.cache = tempCache;
+
+        this.syncCache = syncList.toArray(new Consumer[0]);
+        this.asyncCache = asyncList.toArray(new Consumer[0]);
     }
 
     @Override
@@ -45,15 +53,26 @@ public abstract class Flora<T> implements Cacheable<T>, Subscribable<Listener<T>
 
     @Override
     public void notify(T event) {
-        Consumer<T>[] currentListeners = cache;
-
-        for (Consumer<T> consumer : currentListeners) {
+        Consumer<T>[] syncListeners = this.syncCache;
+        for (Consumer<T> consumer : syncListeners) {
             try {
                 consumer.accept(event);
             } catch (Exception e) {
-                System.err.println("Error in event listener: " + e.getMessage());
                 e.printStackTrace();
             }
+        }
+
+        Consumer<T>[] asyncListeners = this.asyncCache;
+        if (asyncListeners.length > 0) {
+            ForkJoinPool.commonPool().execute(() -> {
+                for (Consumer<T> consumer : asyncListeners) {
+                    try {
+                        consumer.accept(event);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
         }
     }
 }
