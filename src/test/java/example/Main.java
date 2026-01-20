@@ -2,18 +2,24 @@ package example;
 
 import sweetie.evaware.Flora;
 import sweetie.evaware.FloraAutomation;
-import sweetie.evaware.Listener;
-import sweetie.evaware.EventListener;
 import sweetie.evaware.annotations.Commando;
+import sweetie.evaware.api.DispatchMode;
+import sweetie.evaware.api.Subscription;
+import sweetie.evaware.core.ConsumerListener;
+import sweetie.evaware.core.FloraBus;
 
 public class Main {
-    public static class MyEvent extends Flora<MyEvent> {
-        public static final MyEvent INSTANCE = new MyEvent();
+    public static class MyEvent {
+        public static final FloraBus<MyEvent> BUS = Flora.getBus(MyEvent.class);
 
-        public double x, y;
-        public long tickCount;
+        public final double x, y;
+        public final long tickCount;
 
-        private MyEvent() {}
+        public MyEvent(double x, double y, long tickCount) {
+            this.x = x;
+            this.y = y;
+            this.tickCount = tickCount;
+        }
     }
 
     public static class MyListener {
@@ -27,7 +33,7 @@ public class Main {
             System.out.println("[Normal] Tick at: " + e.x + ", " + e.y);
         }
 
-        @Commando(async = true)
+        @Commando(mode = DispatchMode.ASYNC_SINGLE)
         public void onHeavyLogic(MyEvent e) {
             System.out.println("[Async] Async on thread: " + Thread.currentThread().getName());
         }
@@ -39,10 +45,10 @@ public class Main {
         FloraAutomation.register(myListener);
         System.out.println("-> Listener registered via Annotations");
 
-        Listener<MyEvent> manualListener = new Listener<>(0, e -> {
-            System.out.println("[Manual] Lambda listener executed!");
-        });
-        EventListener manualToken = MyEvent.INSTANCE.subscribe(manualListener);
+        ConsumerListener<MyEvent> manualListener = new ConsumerListener<>(
+                0, e -> System.out.println("[Manual] Lambda listener executed!"
+        ));
+        Subscription manualToken = MyEvent.BUS.subscribe(manualListener);
         System.out.println("-> Manual listener subscribed");
 
         System.out.println("\n--- Starting loop ---");
@@ -50,11 +56,7 @@ public class Main {
         for (int i = 0; i < 3; i++) {
             System.out.println("\n> Run " + i);
 
-            MyEvent.INSTANCE.tickCount = i;
-            MyEvent.INSTANCE.x = 70 + i;
-            MyEvent.INSTANCE.y = 2;
-
-            MyEvent.INSTANCE.notify(MyEvent.INSTANCE);
+            MyEvent.BUS.post(new MyEvent(60 * i, 5 + i, i));
 
         }
 
@@ -62,7 +64,7 @@ public class Main {
 
         FloraAutomation.unregister(myListener);
 
-        manualToken.unsubscribe(); // or UpdateEvent.INSTANCE.unsubscribe(manualListener);
+        manualToken.unsubscribe(); // or MyEvent.BUS.unsubscribe(manualListener);
 
         System.out.println("-> All listeners removed.");
     }

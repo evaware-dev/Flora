@@ -1,5 +1,7 @@
 package sweetie.evaware.annotations;
 
+import sweetie.evaware.api.DispatchMode;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -9,5 +11,5 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 public @interface Commando {
     byte priority() default 1;
-    boolean async() default false;
+    DispatchMode mode() default DispatchMode.SYNC;
 }
