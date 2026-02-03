@@ -3,7 +3,7 @@ plugins {
     `maven-publish`
 }
 
-group = "com.github.evaware-dev"
+group = "sweetie.evaware"
 version = "1.0"
 
 repositories {
@@ -25,7 +25,7 @@ publishing {
         create<MavenPublication>("mavenJava") {
             from(components["java"])
 
-            groupId = "com.github.evaware-dev"
+            groupId = "sweetie.evaware"
             artifactId = "flora"
             version = "1.0.0"
         }
