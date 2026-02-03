@@ -21,7 +21,7 @@ public class FloraBus<T> {
     private final Object lock = new Object();
 
     public FloraBus(Class<T> type) {
-        this.currentDispatcher = _ -> {};
+        this.currentDispatcher = e -> {};
     }
 
     public void post(T event) {
