@@ -27,7 +27,7 @@ publishing {
 
             groupId = "com.github.evaware-dev"
             artifactId = "flora"
-            version = "1.0"
+            version = "1.0.0"
         }
     }
 
