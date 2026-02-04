@@ -32,6 +32,7 @@ fi
 
 # Create git tag
 echo "Creating git tag v$VERSION..."
+git tag -d "v$VERSION" 2>/dev/null || true
 git tag -a "v$VERSION" -m "Release version $VERSION"
 
 # Push to remote
