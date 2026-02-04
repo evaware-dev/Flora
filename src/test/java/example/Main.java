@@ -1,12 +1,12 @@
 package example;
 
-import sweetie.evaware.Flora;
-import sweetie.evaware.FloraAutomation;
-import sweetie.evaware.annotations.Commando;
-import sweetie.evaware.api.DispatchMode;
-import sweetie.evaware.api.Subscription;
-import sweetie.evaware.core.ConsumerListener;
-import sweetie.evaware.core.FloraBus;
+import sweetie.evaware.flora.Flora;
+import sweetie.evaware.flora.FloraAutomation;
+import sweetie.evaware.flora.api.Commando;
+import sweetie.evaware.flora.api.DispatchMode;
+import sweetie.evaware.flora.api.Subscription;
+import sweetie.evaware.flora.core.Listener;
+import sweetie.evaware.flora.core.FloraBus;
 
 public class Main {
     public static class MyEvent {
@@ -33,7 +33,7 @@ public class Main {
             System.out.println("[Normal] Tick at: " + e.x + ", " + e.y);
         }
 
-        @Commando(mode = DispatchMode.ASYNC_SINGLE)
+        @Commando(mode = DispatchMode.ASYNC)
         public void onHeavyLogic(MyEvent e) {
             System.out.println("[Async] Async on thread: " + Thread.currentThread().getName());
         }
@@ -45,9 +45,9 @@ public class Main {
         FloraAutomation.register(myListener);
         System.out.println("-> Listener registered via Annotations");
 
-        ConsumerListener<MyEvent> manualListener = new ConsumerListener<>(
-                0, e -> System.out.println("[Manual] Lambda listener executed!"
-        ));
+        Listener<MyEvent> manualListener = new Listener<>(
+                0, e -> System.out.println("[Manual] Lambda listener executed!"), DispatchMode.SYNC
+        );
         Subscription manualToken = MyEvent.BUS.subscribe(manualListener);
         System.out.println("-> Manual listener subscribed");
 

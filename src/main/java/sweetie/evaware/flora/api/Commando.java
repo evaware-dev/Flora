@@ -1,6 +1,4 @@
-package sweetie.evaware.annotations;
-
-import sweetie.evaware.api.DispatchMode;
+package sweetie.evaware.flora.api;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

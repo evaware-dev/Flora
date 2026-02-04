@@ -1,7 +1,7 @@
-package sweetie.evaware.api;
+package sweetie.evaware.flora.api;
 
 public enum DispatchMode {
     SYNC,
-    ASYNC_SINGLE,
+    ASYNC,
     ASYNC_PARALLEL
 }
