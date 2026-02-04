@@ -1,82 +1,93 @@
 package sweetie.evaware.core;
 
-import sweetie.evaware.api.Dispatcher;
+import sweetie.evaware.core.engine.AsyncLoop;
 import sweetie.evaware.api.Subscription;
-import sweetie.evaware.async.AsyncEngine;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ForkJoinPool;
-import java.util.function.Consumer;
 
 public class FloraBus<T> {
-    protected static final class Executors {
-        static final AsyncEngine SINGLE_WORKER = new AsyncEngine();
-        static final ForkJoinPool PARALLEL_POOL = ForkJoinPool.commonPool();
-    }
+    private static final AsyncLoop ASYNC_WORKER = new AsyncLoop();
+    private static final ForkJoinPool PARALLEL_POOL = ForkJoinPool.commonPool();
 
-    private volatile Dispatcher<T> currentDispatcher;
-    private final List<ConsumerListener<T>> consumerListenerList = new ArrayList<>();
     private final Object lock = new Object();
+    private final List<Listener<T>> subscribers = new ArrayList<>();
 
-    public FloraBus(Class<T> type) {
-        this.currentDispatcher = e -> {};
+    private volatile Listener<T>[] syncListeners;
+    private volatile Listener<T>[] asyncListeners;
+    private volatile Listener<T>[] parallelListeners;
+
+    @SuppressWarnings("unchecked")
+    public FloraBus() {
+        this.syncListeners = new Listener[0];
+        this.asyncListeners = new Listener[0];
+        this.parallelListeners = new Listener[0];
     }
 
     public void post(T event) {
-        currentDispatcher.dispatch(event);
+        Listener<T>[] sync = this.syncListeners;
+        int i = 0;
+        int syncLen = sync.length;
+        while (i < syncLen) {
+            sync[i++].accept(event);
+        }
+
+        Listener<T>[] async = this.asyncListeners;
+        int asyncLen = async.length;
+        if (asyncLen > 0) {
+            ASYNC_WORKER.execute(() -> {
+                int j = 0;
+                while (j < asyncLen) {
+                    async[j++].accept(event);
+                }
+            });
+        }
+
+        Listener<T>[] parallel = this.parallelListeners;
+        int k = 0;
+        int parLength = parallel.length;
+        while (k < parLength) {
+            Listener<T> l = parallel[k++];
+            PARALLEL_POOL.execute(() -> l.accept(event));
+        }
     }
 
-    public Subscription subscribe(ConsumerListener<T> consumerListener) {
+    public Subscription subscribe(Listener<T> listener) {
         synchronized (lock) {
-            consumerListenerList.add(consumerListener);
+            subscribers.add(listener);
             rebuild();
         }
-        return () -> {
-            synchronized (lock) {
-                if (consumerListenerList.remove(consumerListener)) rebuild();
-            }
-        };
+        return () -> unsubscribe(listener);
     }
 
-    public void unsubscribe(ConsumerListener<T> listener) {
+    public void unsubscribe(Listener<T> listener) {
         synchronized (lock) {
-            if (consumerListenerList.remove(listener)) {
+            if (subscribers.remove(listener)) {
                 rebuild();
             }
         }
     }
 
     @SuppressWarnings("unchecked")
-    protected void rebuild() {
-        Collections.sort(consumerListenerList);
+    private void rebuild() {
+        Collections.sort(subscribers);
 
-        List<Consumer<T>> sync = new ArrayList<>();
-        List<Consumer<T>> single = new ArrayList<>();
-        List<Consumer<T>> parallel = new ArrayList<>();
+        List<Listener<T>> sync = new ArrayList<>();
+        List<Listener<T>> async = new ArrayList<>();
+        List<Listener<T>> parallel = new ArrayList<>();
 
-        for (ConsumerListener<T> h : consumerListenerList) {
-            switch (h.mode) {
-                case SYNC -> sync.add(h.consumer);
-                case ASYNC_SINGLE -> single.add(h.consumer);
-                case ASYNC_PARALLEL -> parallel.add(h.consumer);
+        for (Listener<T> listener : subscribers) {
+            switch (listener.mode) {
+                case SYNC -> sync.add(listener);
+                case ASYNC -> async.add(listener);
+                case ASYNC_PARALLEL -> parallel.add(listener);
             }
         }
 
-        Consumer<T>[] syncArr = sync.toArray((Consumer<T>[]) new Consumer[0]);
-
-        boolean hasAsync = !single.isEmpty() || !parallel.isEmpty();
-
-        if (!hasAsync) {
-            this.currentDispatcher = new SyncDispatcher<>(syncArr);
-        } else {
-            Consumer<T>[] singleArr = single.toArray((Consumer<T>[]) new Consumer[0]);
-            Consumer<T>[] parallelArr = parallel.toArray((Consumer<T>[]) new Consumer[0]);
-
-            this.currentDispatcher = new AsyncDispatcher<>(
-                    syncArr, singleArr, parallelArr
-            );
-        }
+        this.syncListeners = sync.toArray(new Listener[0]);
+        this.asyncListeners = async.toArray(new Listener[0]);
+        this.parallelListeners = parallel.toArray(new Listener[0]);
     }
 }
