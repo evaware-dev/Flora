@@ -36,7 +36,8 @@ git tag -a "v$VERSION" -m "Release version $VERSION"
 
 # Push to remote
 echo "Pushing to remote..."
-git push origin main
+BRANCH=$(git branch --show-current)
+git push origin "$BRANCH"
 git push origin "v$VERSION"
 
 echo ""
