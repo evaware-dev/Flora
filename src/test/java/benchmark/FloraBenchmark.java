@@ -1,10 +1,10 @@
 package benchmark;
 
 import org.openjdk.jmh.infra.Blackhole;
-import sweetie.evaware.Flora;
-import sweetie.evaware.api.DispatchMode;
-import sweetie.evaware.core.FloraBus;
-import sweetie.evaware.core.Listener;
+import sweetie.evaware.flora.Flora;
+import sweetie.evaware.flora.api.DispatchMode;
+import sweetie.evaware.flora.core.FloraBus;
+import sweetie.evaware.flora.core.Listener;
 
 public class FloraBenchmark implements IBenchmark {
     public static class TestEvent {

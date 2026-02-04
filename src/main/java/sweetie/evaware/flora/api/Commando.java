@@ -1,4 +1,4 @@
-package sweetie.evaware.api;
+package sweetie.evaware.flora.api;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

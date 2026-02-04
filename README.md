@@ -15,6 +15,37 @@ _A high-performance event bus with zero-allocation dispatch, priority-based exec
 
 ---
 
+## Installation
+
+### Gradle
+```gradle
+repositories {
+    maven { url 'https://jitpack.io' }
+}
+
+dependencies {
+    implementation 'com.github.evaware-dev:Flora:VERSION'
+}
+```
+
+### Maven
+```xml
+<repositories>
+    <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
+</repositories>
+
+<dependency>
+    <groupId>com.github.evaware-dev</groupId>
+    <artifactId>Flora</artifactId>
+    <version>VERSION</version>
+</dependency>
+```
+
+---
+
 ## Usage
 
 For a complete, compile-ready example demonstrating **annotations**, **zero-garbage dispatch**, and **async execution**, please see [example](src/test/java/example/Main.java).

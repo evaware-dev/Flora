@@ -1,6 +1,6 @@
-package sweetie.evaware;
+package sweetie.evaware.flora;
 
-import sweetie.evaware.core.FloraBus;
+import sweetie.evaware.flora.core.FloraBus;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

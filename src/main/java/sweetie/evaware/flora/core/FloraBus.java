@@ -1,7 +1,7 @@
-package sweetie.evaware.core;
+package sweetie.evaware.flora.core;
 
-import sweetie.evaware.core.engine.AsyncLoop;
-import sweetie.evaware.api.Subscription;
+import sweetie.evaware.flora.core.engine.AsyncLoop;
+import sweetie.evaware.flora.api.Subscription;
 
 import java.util.ArrayList;
 import java.util.Collections;

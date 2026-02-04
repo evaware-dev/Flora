@@ -1,6 +1,6 @@
-package sweetie.evaware.core;
+package sweetie.evaware.flora.core;
 
-import sweetie.evaware.api.DispatchMode;
+import sweetie.evaware.flora.api.DispatchMode;
 
 import java.util.function.Consumer;
 

@@ -1,4 +1,4 @@
-package sweetie.evaware.api;
+package sweetie.evaware.flora.api;
 
 @FunctionalInterface
 public interface Subscription {
