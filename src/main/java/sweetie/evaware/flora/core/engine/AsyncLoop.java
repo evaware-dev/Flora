@@ -2,12 +2,13 @@ package sweetie.evaware.flora.core.engine;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.Consumer;
 
 public class AsyncLoop extends Thread {
     private static final int CAPACITY = 65536;
     private static final int MASK = CAPACITY - 1;
+    private static final int IDLE_SPINS = 256;
 
     long p01, p02, p03, p04, p05, p06, p07;
     private volatile long producerIndex;
@@ -16,19 +17,22 @@ public class AsyncLoop extends Thread {
     private volatile long consumerIndex;
     long p21, p22, p23, p24, p25, p26, p27;
 
-    private final Runnable[] buffer;
-    private final AtomicBoolean running = new AtomicBoolean(true);
+    private final Object[] events;
+    private final Consumer<?>[][] listeners;
+    private volatile boolean running = true;
 
     private static final VarHandle PRODUCER_IDX;
     private static final VarHandle CONSUMER_IDX;
-    private static final VarHandle ARRAY_ELEM;
+    private static final VarHandle EVENT_ELEM;
+    private static final VarHandle LISTENER_ELEM;
 
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
             PRODUCER_IDX = l.findVarHandle(AsyncLoop.class, "producerIndex", long.class);
             CONSUMER_IDX = l.findVarHandle(AsyncLoop.class, "consumerIndex", long.class);
-            ARRAY_ELEM = MethodHandles.arrayElementVarHandle(Runnable[].class);
+            EVENT_ELEM = MethodHandles.arrayElementVarHandle(Object[].class);
+            LISTENER_ELEM = MethodHandles.arrayElementVarHandle(Consumer[][].class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -36,12 +40,13 @@ public class AsyncLoop extends Thread {
 
     public AsyncLoop() {
         super("Async-Worker");
-        this.buffer = new Runnable[CAPACITY];
-        this.setDaemon(true);
-        this.start();
+        events = new Object[CAPACITY];
+        listeners = new Consumer[CAPACITY][];
+        setDaemon(true);
+        start();
     }
 
-    public void execute(Runnable task) {
+    public <T> void execute(T event, Consumer<T>[] consumers) {
         long currHead;
         long currTail;
 
@@ -56,7 +61,8 @@ public class AsyncLoop extends Thread {
         } while (!PRODUCER_IDX.compareAndSet(this, currTail, currTail + 1));
 
         int offset = (int) (currTail & MASK);
-        ARRAY_ELEM.setRelease(buffer, offset, task);
+        EVENT_ELEM.set(events, offset, event);
+        LISTENER_ELEM.setRelease(listeners, offset, consumers);
 
         if (currTail == currHead) {
             LockSupport.unpark(this);
@@ -65,35 +71,56 @@ public class AsyncLoop extends Thread {
 
     @Override
     public void run() {
-        while (running.get()) {
+        int idleSpins = 0;
+
+        while (running) {
             long currHead = (long) CONSUMER_IDX.getVolatile(this);
             long currTail = (long) PRODUCER_IDX.getVolatile(this);
 
             if (currHead < currTail) {
+                idleSpins = 0;
                 int offset = (int) (currHead & MASK);
-                Runnable task = (Runnable) ARRAY_ELEM.getAcquire(buffer, offset);
+                Consumer<?>[] consumers = (Consumer<?>[]) LISTENER_ELEM.getAcquire(listeners, offset);
 
-                if (task == null) {
+                if (consumers == null) {
                     Thread.onSpinWait();
                     continue;
                 }
 
-                try {
-                    task.run();
-                } catch (Throwable t) {
-                    t.printStackTrace();
-                }
+                dispatch(consumers, EVENT_ELEM.get(events, offset));
 
-                ARRAY_ELEM.setRelease(buffer, offset, null);
+                EVENT_ELEM.set(events, offset, null);
+                LISTENER_ELEM.setRelease(listeners, offset, null);
                 CONSUMER_IDX.setRelease(this, currHead + 1);
-            } else {
-                LockSupport.park();
+                continue;
             }
+
+            if (idleSpins++ < IDLE_SPINS) {
+                Thread.onSpinWait();
+                continue;
+            }
+
+            idleSpins = 0;
+            LockSupport.park();
         }
     }
 
     public void shutdown() {
-        running.set(false);
+        running = false;
         LockSupport.unpark(this);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> void dispatch(Consumer<?>[] consumers, Object event) {
+        Consumer<T>[] typedConsumers = (Consumer<T>[]) consumers;
+        T typedEvent = (T) event;
+
+        for (Consumer<T> consumer : typedConsumers) {
+            try {
+                consumer.accept(typedEvent);
+            } catch (Throwable t) {
+                t.printStackTrace();
+            }
+        }
     }
 }

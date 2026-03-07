@@ -1,46 +1,48 @@
 package benchmark;
 
-import org.openjdk.jmh.infra.Blackhole;
-
-import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class Benchmarks {
     public static void main(String[] args) {
-        List<IBenchmark> benchmarks = List.of(new FloraBenchmark());
-        Blackhole blackhole = new Blackhole("Today's password is swordfish. I understand instantiating Blackholes directly is dangerous.");
+        List<Class<? extends IBenchmark>> benchmarks = List.of(
+                FloraBenchmark.class
+        );
 
-        for (IBenchmark benchmark : benchmarks) {
-            long[] timings = new long[Constants.ITERATIONS];
-            long minTime = Long.MAX_VALUE;
-            long maxTime = Long.MIN_VALUE;
-
-            benchmark.prepare();
-
-            for (int i = 0; i < Constants.WARMUP_ITERATIONS + Constants.ITERATIONS; i++) {
-                long nanos = System.nanoTime();
-                benchmark.benchmark(blackhole);
-                long delta = System.nanoTime() - nanos;
-
-                if (i >= Constants.WARMUP_ITERATIONS) {
-                    timings[i - Constants.WARMUP_ITERATIONS] = delta;
-                    minTime = Math.min(minTime, delta);
-                    maxTime = Math.max(maxTime, delta);
-                }
-            }
-
-            long median = median(timings);
-            System.out.println(benchmark.getClass().getSimpleName() + " " + median + " ± " + ((maxTime - minTime) / 2L));
+        for (Class<? extends IBenchmark> benchmark : benchmarks) {
+            runFork(benchmark);
         }
     }
 
-    private static long median(long[] nums) {
-        Arrays.sort(nums);
-        int length = nums.length;
-        if (length % 2 == 0) {
-            return (nums[length / 2 - 1] + nums[length / 2]) / 2L;
-        } else {
-            return nums[length / 2];
+    private static void runFork(Class<? extends IBenchmark> benchmark) {
+        ProcessBuilder builder = new ProcessBuilder(
+                javaBin(),
+                "-cp",
+                System.getProperty("java.class.path"),
+                SingleBenchmarkMain.class.getName(),
+                benchmark.getName()
+        );
+        builder.redirectErrorStream(true);
+
+        try {
+            Process process = builder.start();
+            String output = new String(process.getInputStream().readAllBytes()).trim();
+            int exitCode = process.waitFor();
+
+            if (!output.isEmpty()) {
+                System.out.println(output.lines().collect(Collectors.joining(System.lineSeparator())));
+            }
+
+            if (exitCode != 0) {
+                throw new IllegalStateException("Benchmark failed: " + benchmark.getSimpleName());
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Unable to run benchmark " + benchmark.getSimpleName(), e);
         }
+    }
+
+    private static String javaBin() {
+        String separator = System.getProperty("file.separator");
+        return System.getProperty("java.home") + separator + "bin" + separator + "java";
     }
 }
