@@ -1,46 +1,51 @@
 package sweetie.evaware.flora.core;
 
 import sweetie.evaware.flora.api.Subscription;
-import sweetie.evaware.flora.core.engine.AsyncLoop;
+import sweetie.evaware.flora.core.engine.DispatchEngine;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ForkJoinPool;
 import java.util.function.Consumer;
 
 public class FloraBus<T> {
     private static final Consumer<?>[] EMPTY_CONSUMERS = new Consumer[0];
-    private static final AsyncLoop ASYNC_WORKER = new AsyncLoop();
-    private static final ForkJoinPool PARALLEL_POOL = ForkJoinPool.commonPool();
 
+    private final DispatchEngine engine;
     private final Object lock = new Object();
     private final List<Listener<T>> subscribers = new ArrayList<>();
 
-    private volatile Consumer<T>[] syncConsumers;
-    private volatile Consumer<T>[] asyncConsumers;
-    private volatile Consumer<T>[] parallelConsumers;
+    private Consumer<T>[] syncConsumers;
+    private Consumer<T>[] asyncConsumers;
+    private Consumer<T>[] parallelConsumers;
+    private boolean syncOnly;
 
     @SuppressWarnings("unchecked")
     public FloraBus() {
+        this.engine = DispatchEngine.defaultEngine();
         this.syncConsumers = (Consumer<T>[]) EMPTY_CONSUMERS;
         this.asyncConsumers = (Consumer<T>[]) EMPTY_CONSUMERS;
         this.parallelConsumers = (Consumer<T>[]) EMPTY_CONSUMERS;
+        this.syncOnly = true;
     }
 
     public void post(T event) {
         Consumer<T>[] sync = syncConsumers;
         for (Consumer<T> consumer : sync) {
-            accept(consumer, event);
+            consumer.accept(event);
+        }
+
+        if (syncOnly) {
+            return;
         }
 
         Consumer<T>[] async = asyncConsumers;
         if (async.length > 0) {
-            ASYNC_WORKER.execute(event, async);
+            engine.dispatchAsync(event, async);
         }
 
         Consumer<T>[] parallel = parallelConsumers;
-        for (Consumer<T> consumer : parallel) {
-            PARALLEL_POOL.execute(() -> accept(consumer, event));
+        if (parallel.length > 0) {
+            engine.dispatchParallel(event, parallel);
         }
     }
 
@@ -92,16 +97,9 @@ public class FloraBus<T> {
             }
         }
 
-        syncConsumers = sync;
         asyncConsumers = async;
         parallelConsumers = parallel;
-    }
-
-    private static <T> void accept(Consumer<T> consumer, T event) {
-        try {
-            consumer.accept(event);
-        } catch (Throwable t) {
-            t.printStackTrace();
-        }
+        syncOnly = asyncCount == 0 && parallelCount == 0;
+        syncConsumers = sync;
     }
 }

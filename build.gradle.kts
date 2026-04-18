@@ -3,9 +3,6 @@ plugins {
     id("maven-publish")
 }
 
-group = "com.github.evaware-dev"
-version = "1.3.1"
-
 repositories {
     mavenCentral()
 }
@@ -22,6 +19,30 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    failOnNoDiscoveredTests = false
+}
+
+tasks.register<JavaExec>("benchmark") {
+    group = "verification"
+    description = "Runs lightweight benchmark harness."
+    dependsOn(tasks.testClasses)
+    mainClass.set("benchmark.Benchmarks")
+    classpath = sourceSets.test.get().runtimeClasspath
+}
+
+tasks.register<JavaExec>("jmh") {
+    group = "verification"
+    description = "Runs JMH benchmarks."
+    dependsOn(tasks.testClasses)
+    mainClass.set("org.openjdk.jmh.Main")
+    classpath = sourceSets.test.get().runtimeClasspath
+    args(
+        "benchmark.FloraVsBlazingJmhBenchmark.*",
+        "-wi", "3",
+        "-i", "5",
+        "-f", "1",
+        "-tu", "ns"
+    )
 }
 
 java {

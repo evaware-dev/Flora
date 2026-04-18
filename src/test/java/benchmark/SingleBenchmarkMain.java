@@ -1,13 +1,11 @@
 package benchmark;
 
-import org.openjdk.jmh.infra.Blackhole;
-
 import java.util.Arrays;
 
 public class SingleBenchmarkMain {
     public static void main(String[] args) throws Exception {
         IBenchmark benchmark = createBenchmark(args[0]);
-        Blackhole blackhole = new Blackhole("Today's password is swordfish. I understand instantiating Blackholes directly is dangerous.");
+        BenchmarkSink sink = new BenchmarkSink();
         long[] timings = new long[Constants.MEASUREMENTS];
 
         benchmark.prepare();
@@ -18,7 +16,7 @@ public class SingleBenchmarkMain {
             long nanos = System.nanoTime();
 
             for (int operation = 0; operation < Constants.OPERATIONS_PER_SAMPLE; operation++) {
-                benchmark.benchmark(blackhole);
+                benchmark.benchmark(sink);
             }
 
             if (sample >= Constants.WARMUP_MEASUREMENTS) {
@@ -29,11 +27,26 @@ public class SingleBenchmarkMain {
 
         Arrays.sort(timings);
 
+        long min = timings[0];
+        long max = timings[timings.length - 1];
+        double avg = average(timings);
         long median = percentile(timings, 0.5);
         long p05 = percentile(timings, 0.05);
         long p95 = percentile(timings, 0.95);
+        benchmark.close();
 
-        System.out.println(benchmark.getClass().getSimpleName() + " " + median + " ± " + ((p95 - p05) / 2L));
+        System.out.printf(
+                "%s avg=%.2f ns median=%d ns min=%d ns max=%d ns p05=%d ns p95=%d ns spread=%d ns checksum=%d%n",
+                benchmark.getClass().getSimpleName(),
+                avg,
+                median,
+                min,
+                max,
+                p05,
+                p95,
+                p95 - p05,
+                sink.value()
+        );
     }
 
     private static IBenchmark createBenchmark(String className) throws Exception {
@@ -44,5 +57,13 @@ public class SingleBenchmarkMain {
     private static long percentile(long[] timings, double percentile) {
         int index = (int) Math.round((timings.length - 1) * percentile);
         return timings[Math.max(0, Math.min(index, timings.length - 1))];
+    }
+
+    private static double average(long[] timings) {
+        long sum = 0L;
+        for (long timing : timings) {
+            sum += timing;
+        }
+        return (double) sum / timings.length;
     }
 }

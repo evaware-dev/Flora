@@ -9,9 +9,9 @@ import sweetie.evaware.flora.util.LambdaFactory;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 public final class FloraAutomation {
@@ -24,7 +24,7 @@ public final class FloraAutomation {
             return scanHandlers(type);
         }
     };
-    private static final Map<Object, Subscription[]> REGISTRY = new ConcurrentHashMap<>();
+    private static final Map<Object, Subscription[]> REGISTRY = new IdentityHashMap<>();
 
     private FloraAutomation() {
     }
@@ -43,17 +43,15 @@ public final class FloraAutomation {
     }
 
     public static void unregister(Object target) {
-        Subscription[] subscriptions;
         synchronized (LOCK) {
-            subscriptions = REGISTRY.remove(target);
-        }
+            Subscription[] subscriptions = REGISTRY.remove(target);
+            if (subscriptions == null) {
+                return;
+            }
 
-        if (subscriptions == null) {
-            return;
-        }
-
-        for (Subscription subscription : subscriptions) {
-            subscription.unsubscribe();
+            for (Subscription subscription : subscriptions) {
+                subscription.unsubscribe();
+            }
         }
     }
 
