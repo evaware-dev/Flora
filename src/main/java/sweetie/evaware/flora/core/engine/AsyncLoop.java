@@ -116,11 +116,7 @@ public class AsyncLoop extends Thread {
         T typedEvent = (T) event;
 
         for (Consumer<T> consumer : typedConsumers) {
-            try {
-                consumer.accept(typedEvent);
-            } catch (Throwable t) {
-                t.printStackTrace();
-            }
+            DispatchEngine.dispatchSafely(consumer, typedEvent);
         }
     }
 }

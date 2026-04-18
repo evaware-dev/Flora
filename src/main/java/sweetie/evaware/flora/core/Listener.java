@@ -1,6 +1,7 @@
 package sweetie.evaware.flora.core;
 
 import sweetie.evaware.flora.api.DispatchMode;
+import sweetie.evaware.flora.core.engine.DispatchEngine;
 
 import java.util.function.Consumer;
 
@@ -24,11 +25,7 @@ public final class Listener<E> implements Comparable<Listener<E>> {
     }
 
     public void accept(E event) {
-        try {
-            consumer.accept(event);
-        } catch (Throwable t) {
-            t.printStackTrace();
-        }
+        DispatchEngine.dispatchSafely(consumer, event);
     }
 
     @Override

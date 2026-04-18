@@ -6,6 +6,7 @@ import java.util.stream.Collectors;
 public class Benchmarks {
     public static void main(String[] args) {
         List<Class<? extends IBenchmark>> benchmarks = List.of(
+                BlazingBenchmark.class,
                 FloraBenchmark.class
         );
 
