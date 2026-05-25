@@ -57,7 +57,7 @@ publishing {
         create<MavenPublication>("maven") {
             from(components["java"])
             groupId = "com.github.evaware-dev"
-            artifactId = "Flora"
+            artifactId = "flora"
             version = project.version.toString()
         }
     }
@@ -93,7 +93,7 @@ tasks.register("release") {
             val output = process.inputStream.bufferedReader().readText().trim()
             val exitCode = process.waitFor()
             if (exitCode != 0 && args[0] != "tag") {
-                 throw GradleException("Ошибка при выполнении: git ${args.joinToString(" ")}")
+                 throw GradleException("Error: git ${args.joinToString(" ")}")
             }
             return output
         }
@@ -102,12 +102,12 @@ tasks.register("release") {
         if (status.isNotEmpty()) {
             println("Saving")
             git("add", "gradle.properties")
-            git("commit", "-m", "Релиз версии $newVersion")
+            git("commit", "-m", "Update $newVersion")
         }
         
         println("Creating tag v$newVersion...")
         try { git("tag", "-d", "v$newVersion") } catch (e: Exception) {}
-        git("tag", "-a", "v$newVersion", "-m", "Релиз версии $newVersion")
+        git("tag", "-a", "v$newVersion", "-m", "Update $newVersion")
         
         println("Push")
         val branch = git("branch", "--show-current")
