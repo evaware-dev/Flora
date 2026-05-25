@@ -61,4 +61,60 @@ publishing {
             version = project.version.toString()
         }
     }
+
+    repositories {
+        maven("https://maven.pkg.github.com/evaware-dev/Flora") {
+            name = "GitHubPackages"
+            credentials {
+                username = project.findProperty("systemProp.gpr.user") as String?
+                password = project.findProperty("systemProp.gpr.token") as String?
+            }
+        }
+    }
+}
+
+tasks.register("release") {
+    group = "publishing"
+    description = "Upload new version: update version, commit, tag, push"
+
+    doLast {
+        val newVersion = project.findProperty("newVersion") as String?
+            ?: throw GradleException("./gradlew release -PnewVersion=<version>")
+            
+        val propertiesFile = file("gradle.properties")
+        val propertiesContent = propertiesFile.readText()
+        val updatedContent = propertiesContent.replace(Regex("version=.*"), "version=$newVersion")
+        propertiesFile.writeText(updatedContent)
+        
+        println("Version updated to $newVersion in gradle.properties")
+        
+        fun git(vararg args: String): String {
+            val process = ProcessBuilder("git", *args).start()
+            val output = process.inputStream.bufferedReader().readText().trim()
+            val exitCode = process.waitFor()
+            if (exitCode != 0 && args[0] != "tag") {
+                 throw GradleException("Ошибка при выполнении: git ${args.joinToString(" ")}")
+            }
+            return output
+        }
+        
+        val status = git("status", "--porcelain")
+        if (status.isNotEmpty()) {
+            println("Saving")
+            git("add", "gradle.properties")
+            git("commit", "-m", "Релиз версии $newVersion")
+        }
+        
+        println("Creating tag v$newVersion...")
+        try { git("tag", "-d", "v$newVersion") } catch (e: Exception) {}
+        git("tag", "-a", "v$newVersion", "-m", "Релиз версии $newVersion")
+        
+        println("Push")
+        val branch = git("branch", "--show-current")
+        git("push", "origin", branch)
+        git("push", "origin", "v$newVersion")
+        
+        println("\nRelease")
+        println("Upload package: ./gradlew publish")
+    }
 }

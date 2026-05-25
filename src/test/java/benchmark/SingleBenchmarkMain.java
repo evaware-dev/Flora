@@ -1,11 +1,13 @@
 package benchmark;
 
+import benchmark.api.*;
+
 import java.util.Arrays;
 
 public class SingleBenchmarkMain {
     public static void main(String[] args) throws Exception {
         IBenchmark benchmark = createBenchmark(args[0]);
-        BenchmarkSink sink = new BenchmarkSink();
+        Blackhole sink = new Blackhole();
         long[] timings = new long[Constants.MEASUREMENTS];
 
         benchmark.prepare();

@@ -5,14 +5,12 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.function.Consumer;
 
 public final class DispatchEngine {
-    private static final DispatchEngine DEFAULT = new DispatchEngine(new AsyncLoop(), ForkJoinPool.commonPool());
+    private static final DispatchEngine DEFAULT = new DispatchEngine();
 
-    private final AsyncLoop asyncLoop;
-    private final Executor parallelExecutor;
+    private final AsyncLoop asyncLoop = new AsyncLoop();
+    private final Executor parallelExecutor = ForkJoinPool.commonPool();
 
-    private DispatchEngine(AsyncLoop asyncLoop, Executor parallelExecutor) {
-        this.asyncLoop = asyncLoop;
-        this.parallelExecutor = parallelExecutor;
+    private DispatchEngine() {
     }
 
     public static DispatchEngine defaultEngine() {
@@ -24,8 +22,8 @@ public final class DispatchEngine {
     }
 
     public <T> void dispatchParallel(T event, Consumer<T>[] consumers) {
-        for (int i = 0, length = consumers.length; i < length; i++) {
-            parallelExecutor.execute(new ParallelDispatch<>(consumers[i], event));
+        for (Consumer<T> consumer : consumers) {
+            parallelExecutor.execute(() -> dispatchSafely(consumer, event));
         }
     }
 
@@ -34,13 +32,6 @@ public final class DispatchEngine {
             consumer.accept(event);
         } catch (Throwable t) {
             t.printStackTrace();
-        }
-    }
-
-    private record ParallelDispatch<T>(Consumer<T> consumer, T event) implements Runnable {
-        @Override
-        public void run() {
-            dispatchSafely(consumer, event);
         }
     }
 }

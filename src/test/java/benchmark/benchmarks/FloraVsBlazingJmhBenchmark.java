@@ -1,5 +1,6 @@
-package benchmark;
+package benchmark.benchmarks;
 
+import benchmark.blazebus.BlazingBus;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;

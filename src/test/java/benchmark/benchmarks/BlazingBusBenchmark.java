@@ -1,9 +1,12 @@
-package benchmark;
+package benchmark.benchmarks;
 
-public final class BlazingBenchmark extends AbstractDispatchBenchmark<BenchmarkEvent> {
+import benchmark.api.*;
+import benchmark.blazebus.BlazingBus;
+
+public final class BlazingBusBenchmark extends Benchmark<BenchmarkEvent> {
     private BlazingBus<BenchmarkEvent> bus;
 
-    public BlazingBenchmark() {
+    public BlazingBusBenchmark() {
         super(new BenchmarkEvent());
     }
 

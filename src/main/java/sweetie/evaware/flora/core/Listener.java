@@ -5,16 +5,7 @@ import sweetie.evaware.flora.core.engine.DispatchEngine;
 
 import java.util.function.Consumer;
 
-public final class Listener<E> implements Comparable<Listener<E>> {
-    public final int priority;
-    public final Consumer<E> consumer;
-    public final DispatchMode mode;
-
-    public Listener(int priority, Consumer<E> consumer, DispatchMode mode) {
-        this.priority = priority;
-        this.consumer = consumer;
-        this.mode = mode;
-    }
+public record Listener<E>(int priority, Consumer<E> consumer, DispatchMode mode) implements Comparable<Listener<E>> {
 
     public Listener(Consumer<E> consumer, DispatchMode mode) {
         this(0, consumer, mode);
@@ -30,6 +21,6 @@ public final class Listener<E> implements Comparable<Listener<E>> {
 
     @Override
     public int compareTo(Listener<E> o) {
-        return Integer.compare(o.priority, this.priority);
+        return Integer.compare(o.priority(), priority());
     }
 }

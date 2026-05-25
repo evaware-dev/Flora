@@ -8,16 +8,11 @@ import sweetie.evaware.flora.core.Listener;
 import sweetie.evaware.flora.util.LambdaFactory;
 
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Consumer;
 
 public final class FloraAutomation {
-    private static final Object LOCK = new Object();
     private static final Subscription[] EMPTY_SUBSCRIPTIONS = new Subscription[0];
-    private static final HandlerMethod[] EMPTY_HANDLERS = new HandlerMethod[0];
     private static final ClassValue<HandlerMethod[]> HANDLERS = new ClassValue<>() {
         @Override
         protected HandlerMethod[] computeValue(Class<?> type) {
@@ -29,29 +24,25 @@ public final class FloraAutomation {
     private FloraAutomation() {
     }
 
-    public static void register(Object target) {
-        synchronized (LOCK) {
-            if (REGISTRY.containsKey(target)) {
-                return;
-            }
+    public static synchronized void register(Object target) {
+        if (REGISTRY.containsKey(target)) {
+            return;
+        }
 
-            Subscription[] subscriptions = subscribe(target);
-            if (subscriptions.length > 0) {
-                REGISTRY.put(target, subscriptions);
-            }
+        Subscription[] subscriptions = subscribe(target);
+        if (subscriptions.length > 0) {
+            REGISTRY.put(target, subscriptions);
         }
     }
 
-    public static void unregister(Object target) {
-        synchronized (LOCK) {
-            Subscription[] subscriptions = REGISTRY.remove(target);
-            if (subscriptions == null) {
-                return;
-            }
+    public static synchronized void unregister(Object target) {
+        Subscription[] subscriptions = REGISTRY.remove(target);
+        if (subscriptions == null) {
+            return;
+        }
 
-            for (Subscription subscription : subscriptions) {
-                subscription.unsubscribe();
-            }
+        for (Subscription subscription : subscriptions) {
+            subscription.unsubscribe();
         }
     }
 
@@ -79,18 +70,10 @@ public final class FloraAutomation {
     }
 
     private static HandlerMethod[] scanHandlers(Class<?> type) {
-        List<HandlerMethod> handlers = new ArrayList<>();
-
-        for (Method method : type.getDeclaredMethods()) {
-            Commando info = method.getAnnotation(Commando.class);
-            if (info == null || method.getParameterCount() != 1) {
-                continue;
-            }
-
-            handlers.add(new HandlerMethod(method, method.getParameterTypes()[0], info.priority(), info.mode()));
-        }
-
-        return handlers.isEmpty() ? EMPTY_HANDLERS : handlers.toArray(EMPTY_HANDLERS);
+        return Arrays.stream(type.getDeclaredMethods())
+                .filter(m -> m.isAnnotationPresent(Commando.class) && m.getParameterCount() == 1)
+                .map(m -> new HandlerMethod(m, m.getParameterTypes()[0], m.getAnnotation(Commando.class).priority(), m.getAnnotation(Commando.class).mode()))
+                .toArray(HandlerMethod[]::new);
     }
 
     private record HandlerMethod(Method method, Class<?> eventType, int priority, DispatchMode mode) {

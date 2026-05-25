@@ -1,9 +1,11 @@
-package benchmark;
+package benchmark.api;
 
-public abstract class AbstractDispatchBenchmark<T extends BenchmarkEvent> implements IBenchmark {
+import benchmark.Constants;
+
+public abstract class Benchmark<T extends BenchmarkEvent> implements IBenchmark {
     protected final T event;
 
-    protected AbstractDispatchBenchmark(T event) {
+    protected Benchmark(T event) {
         this.event = event;
     }
 
@@ -13,7 +15,7 @@ public abstract class AbstractDispatchBenchmark<T extends BenchmarkEvent> implem
     }
 
     @Override
-    public final void benchmark(BenchmarkSink sink) {
+    public final void benchmark(Blackhole sink) {
         event.sink = sink;
         post(event);
     }

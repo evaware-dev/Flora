@@ -1,9 +1,9 @@
-package benchmark;
+package benchmark.api;
 
 public interface IBenchmark {
     void prepare();
 
-    void benchmark(BenchmarkSink sink);
+    void benchmark(Blackhole sink);
 
     default void close() {
     }

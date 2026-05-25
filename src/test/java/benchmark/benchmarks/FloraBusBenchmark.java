@@ -1,12 +1,14 @@
-package benchmark;
+package benchmark.benchmarks;
+
+import benchmark.api.*;
 
 import sweetie.evaware.flora.Flora;
 import sweetie.evaware.flora.api.DispatchMode;
 import sweetie.evaware.flora.core.FloraBus;
 import sweetie.evaware.flora.core.Listener;
 
-public final class FloraBenchmark extends AbstractDispatchBenchmark<FloraBenchmark.FloraEvent> {
-    public FloraBenchmark() {
+public final class FloraBusBenchmark extends Benchmark<FloraBusBenchmark.FloraEvent> {
+    public FloraBusBenchmark() {
         super(new FloraEvent());
     }
 

@@ -10,27 +10,16 @@ import java.util.function.Consumer;
 public class FloraBus<T> {
     private static final Consumer<?>[] EMPTY_CONSUMERS = new Consumer[0];
 
-    private final DispatchEngine engine;
-    private final Object lock = new Object();
+    private final DispatchEngine engine = DispatchEngine.defaultEngine();
     private final List<Listener<T>> subscribers = new ArrayList<>();
 
-    private Consumer<T>[] syncConsumers;
-    private Consumer<T>[] asyncConsumers;
-    private Consumer<T>[] parallelConsumers;
-    private boolean syncOnly;
-
-    @SuppressWarnings("unchecked")
-    public FloraBus() {
-        this.engine = DispatchEngine.defaultEngine();
-        this.syncConsumers = (Consumer<T>[]) EMPTY_CONSUMERS;
-        this.asyncConsumers = (Consumer<T>[]) EMPTY_CONSUMERS;
-        this.parallelConsumers = (Consumer<T>[]) EMPTY_CONSUMERS;
-        this.syncOnly = true;
-    }
+    private Consumer<T>[] syncConsumers = (Consumer<T>[]) EMPTY_CONSUMERS;
+    private Consumer<T>[] asyncConsumers = (Consumer<T>[]) EMPTY_CONSUMERS;
+    private Consumer<T>[] parallelConsumers = (Consumer<T>[]) EMPTY_CONSUMERS;
+    private boolean syncOnly = true;
 
     public void post(T event) {
-        Consumer<T>[] sync = syncConsumers;
-        for (Consumer<T> consumer : sync) {
+        for (Consumer<T> consumer : syncConsumers) {
             consumer.accept(event);
         }
 
@@ -38,30 +27,24 @@ public class FloraBus<T> {
             return;
         }
 
-        Consumer<T>[] async = asyncConsumers;
-        if (async.length > 0) {
-            engine.dispatchAsync(event, async);
+        if (asyncConsumers.length > 0) {
+            engine.dispatchAsync(event, asyncConsumers);
         }
 
-        Consumer<T>[] parallel = parallelConsumers;
-        if (parallel.length > 0) {
-            engine.dispatchParallel(event, parallel);
+        if (parallelConsumers.length > 0) {
+            engine.dispatchParallel(event, parallelConsumers);
         }
     }
 
-    public Subscription subscribe(Listener<T> listener) {
-        synchronized (lock) {
-            subscribers.add(listener);
-            rebuild();
-        }
+    public synchronized Subscription subscribe(Listener<T> listener) {
+        subscribers.add(listener);
+        rebuild();
         return () -> unsubscribe(listener);
     }
 
-    public void unsubscribe(Listener<T> listener) {
-        synchronized (lock) {
-            if (subscribers.remove(listener)) {
-                rebuild();
-            }
+    public synchronized void unsubscribe(Listener<T> listener) {
+        if (subscribers.remove(listener)) {
+            rebuild();
         }
     }
 
@@ -69,37 +52,21 @@ public class FloraBus<T> {
     private void rebuild() {
         subscribers.sort(null);
 
-        int syncCount = 0;
-        int asyncCount = 0;
-        int parallelCount = 0;
+        List<Consumer<T>> sync = new ArrayList<>();
+        List<Consumer<T>> async = new ArrayList<>();
+        List<Consumer<T>> parallel = new ArrayList<>();
 
         for (Listener<T> listener : subscribers) {
-            switch (listener.mode) {
-                case SYNC -> syncCount++;
-                case ASYNC -> asyncCount++;
-                case ASYNC_PARALLEL -> parallelCount++;
+            switch (listener.mode()) {
+                case SYNC -> sync.add(listener.consumer());
+                case ASYNC -> async.add(listener.consumer());
+                case ASYNC_PARALLEL -> parallel.add(listener.consumer());
             }
         }
 
-        Consumer<T>[] sync = syncCount == 0 ? (Consumer<T>[]) EMPTY_CONSUMERS : new Consumer[syncCount];
-        Consumer<T>[] async = asyncCount == 0 ? (Consumer<T>[]) EMPTY_CONSUMERS : new Consumer[asyncCount];
-        Consumer<T>[] parallel = parallelCount == 0 ? (Consumer<T>[]) EMPTY_CONSUMERS : new Consumer[parallelCount];
-
-        int syncIndex = 0;
-        int asyncIndex = 0;
-        int parallelIndex = 0;
-
-        for (Listener<T> listener : subscribers) {
-            switch (listener.mode) {
-                case SYNC -> sync[syncIndex++] = listener.consumer;
-                case ASYNC -> async[asyncIndex++] = listener.consumer;
-                case ASYNC_PARALLEL -> parallel[parallelIndex++] = listener.consumer;
-            }
-        }
-
-        asyncConsumers = async;
-        parallelConsumers = parallel;
-        syncOnly = asyncCount == 0 && parallelCount == 0;
-        syncConsumers = sync;
+        syncConsumers = sync.toArray(new Consumer[0]);
+        asyncConsumers = async.toArray(new Consumer[0]);
+        parallelConsumers = parallel.toArray(new Consumer[0]);
+        syncOnly = asyncConsumers.length == 0 && parallelConsumers.length == 0;
     }
 }

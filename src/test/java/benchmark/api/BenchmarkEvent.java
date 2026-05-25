@@ -1,6 +1,6 @@
-package benchmark;
+package benchmark.api;
 
 public class BenchmarkEvent {
-    public BenchmarkSink sink;
+    public Blackhole sink;
     public int payload = 123;
 }

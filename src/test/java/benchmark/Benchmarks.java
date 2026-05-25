@@ -1,13 +1,16 @@
 package benchmark;
 
+import benchmark.benchmarks.*;
+import benchmark.api.*;
+
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class Benchmarks {
     public static void main(String[] args) {
         List<Class<? extends IBenchmark>> benchmarks = List.of(
-                BlazingBenchmark.class,
-                FloraBenchmark.class
+                BlazingBusBenchmark.class,
+                FloraBusBenchmark.class
         );
 
         for (Class<? extends IBenchmark> benchmark : benchmarks) {

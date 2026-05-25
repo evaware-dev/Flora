@@ -1,21 +1,21 @@
-package benchmark;
+package benchmark.blazebus;
 
 import java.util.function.Consumer;
 
-final class BlazingBus<T> {
+public final class BlazingBus<T> {
     private Consumer<T>[] listeners;
     private int size;
 
     @SuppressWarnings("unchecked")
-    BlazingBus(int capacity) {
+    public BlazingBus(int capacity) {
         listeners = new Consumer[capacity];
     }
 
-    void subscribe(Consumer<T> listener) {
+    public void subscribe(Consumer<T> listener) {
         listeners[size++] = listener;
     }
 
-    void seal() {
+    public void seal() {
         Consumer<T>[] current = listeners;
         if (current.length == size) {
             return;
@@ -27,10 +27,9 @@ final class BlazingBus<T> {
         listeners = compact;
     }
 
-    void post(T event) {
-        Consumer<T>[] current = listeners;
-        for (int i = 0, length = current.length; i < length; i++) {
-            current[i].accept(event);
+    public void post(T event) {
+        for (Consumer<T> listener : listeners) {
+            listener.accept(event);
         }
     }
 }
