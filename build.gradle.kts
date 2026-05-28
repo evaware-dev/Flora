@@ -63,11 +63,16 @@ publishing {
     }
 
     repositories {
-        maven("https://maven.pkg.github.com/evaware-dev/Flora") {
-            name = "GitHubPackages"
-            credentials {
-                username = project.findProperty("systemProp.gpr.user") as String?
-                password = project.findProperty("systemProp.gpr.token") as String?
+        val ghRepo = System.getenv("GITHUB_REPOSITORY")
+        if (ghRepo != null) {
+            maven("https://maven.pkg.github.com/$ghRepo") {
+                name = "GitHubPackages"
+                credentials {
+                    username = System.getenv("GITHUB_ACTOR")
+                        ?: project.findProperty("systemProp.gpr.user") as String?
+                    password = System.getenv("GITHUB_TOKEN")
+                        ?: project.findProperty("systemProp.gpr.token") as String?
+                }
             }
         }
     }
