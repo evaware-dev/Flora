@@ -1,33 +1,23 @@
-# Flora - EventBus for Java
+# Flora
 
-_A fast, lightweight event bus with priority-based dispatch, annotation support, and built-in async modes._
-
----
+Fast and lightweight event bus for Java with priority dispatch, annotations, and built-in asynchronous modes.
 
 ## Features
 
-*   **Fast Hot Path** - Snapshot arrays, exact-type routing, and minimal overhead on `post()`.
-*   **Hybrid Dispatch** - Supports **SYNC**, ordered striped **ASYNC**, and allocation-free **ASYNC_PARALLEL** worker lanes.
-*   **Priority System** - Higher priority listeners are invoked first in **SYNC** and **ASYNC** modes.
-*   **Annotation Registration** - Register `@Commando` methods through `Flora.register()`.
-*   **Thread-Safe Core** - Subscribe/unsubscribe atomically publishes immutable snapshots; reads stay lock-free.
-*   **Zero Dependencies** - Pure Java with no external runtime libraries.
+- Exact-type event routing with allocation-free synchronous dispatch.
+- Ordered `ASYNC` and concurrent `ASYNC_PARALLEL` modes.
+- Priority-based listeners with immutable snapshots and lock-free reads.
+- Annotation registration through `@Commando` and `Flora.register()`.
+- Bounded worker queues with backpressure instead of dropped events.
+- Pure Java 17 with no runtime dependencies.
 
----
+## Usage
 
-## Requirements
-
-*   **Java 17+**
-
----
-
-## Installation
+See the compile-ready [example](src/test/java/example/Main.java) for manual listeners, annotations, priorities, and asynchronous dispatch.
 
 ### GitHub Packages
 
-GitHub Packages publishes Flora as `sweetie.evaware:flora` and requires GitHub credentials when resolving Maven packages.
-
-```gradle
+```groovy
 repositories {
     maven {
         url 'https://maven.pkg.github.com/evaware-dev/Flora'
@@ -45,9 +35,7 @@ dependencies {
 
 ### JitPack
 
-JitPack derives coordinates from the GitHub owner and repository name, so its dependency remains repository-based.
-
-```gradle
+```groovy
 repositories {
     maven { url 'https://jitpack.io' }
 }
@@ -57,41 +45,15 @@ dependencies {
 }
 ```
 
-### GitHub Packages with Maven
+JitPack coordinates are derived from the GitHub owner and repository name and therefore differ from GitHub Packages coordinates.
 
-```xml
-<repositories>
-    <repository>
-        <id>github</id>
-        <url>https://maven.pkg.github.com/evaware-dev/Flora</url>
-    </repository>
-</repositories>
+## Dispatch behavior
 
-<dependency>
-    <groupId>sweetie.evaware</groupId>
-    <artifactId>flora</artifactId>
-    <version>VERSION</version>
-</dependency>
-```
-
----
-
-## Usage
-
-For a complete, compile-ready example with **manual listeners**, **annotations**, and **async dispatch**, see [example](src/test/java/example/Main.java).
-
----
-
-## Notes
-
-*   Events are dispatched by **exact class**.
-*   Each bus is assigned to one ordered `ASYNC` worker lane. Independent buses are striped across lanes to reduce head-of-line blocking.
-*   `ASYNC_PARALLEL` listeners run on Flora's parallel worker lanes; execution order is intentionally unspecified.
-*   Async listeners may finish **after** `post()` returns.
-*   Async queues are bounded. When a lane is full, `post()` applies backpressure with a short spin followed by parking instead of dropping events.
-*   An already queued async callback may still run after its subscription is removed.
-
----
+- Events are dispatched by exact runtime class.
+- Each bus is assigned to one ordered `ASYNC` worker lane.
+- `ASYNC_PARALLEL` listener order is intentionally unspecified.
+- Asynchronous listeners may finish after `post()` returns.
+- Removing a subscription does not cancel callbacks that are already queued.
 
 ## License
 
