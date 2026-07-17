@@ -1,14 +1,16 @@
 package example;
 
 import sweetie.evaware.flora.Flora;
-import sweetie.evaware.flora.FloraAutomation;
 import sweetie.evaware.flora.api.Commando;
 import sweetie.evaware.flora.api.DispatchMode;
+import sweetie.evaware.flora.api.Subscription;
 import sweetie.evaware.flora.core.FloraBus;
+import sweetie.evaware.flora.core.Listener;
+
+import java.util.concurrent.TimeUnit;
 
 public class Main {
 
-    // Bla bla bla
     public enum LogType {
         SYSTEM("--- ", " ---"),
         ACTION("> ", ""),
@@ -29,7 +31,6 @@ public class Main {
         }
     }
 
-    // Events
     public static class UserLoginEvent {
         public static final FloraBus<UserLoginEvent> BUS = Flora.getBus(UserLoginEvent.class);
 
@@ -54,29 +55,28 @@ public class Main {
         }
     }
 
-    // Listeners
     public static class AnalyticsService {
 
-        // Runs synchronously with high priority for quick validation
         @Commando(priority = 10)
         public void onUserLoginFast(UserLoginEvent event) {
             LogType.ANALYTICS_FAST.log("User " + event.username + " initiated login.");
         }
 
-        // Asynchronous task (non-blocking, e.g., DB write or metrics tracking)
         @Commando(mode = DispatchMode.ASYNC)
         public void onUserLoginAsync(UserLoginEvent event) {
             LogType.ANALYTICS_DB.log("Saving to DB: " + event.username + " from IP: " + event.ipAddress);
             try {
                 Thread.sleep(500);
-            } catch (InterruptedException ignored) {} // Simulating network/DB latency
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                return;
+            }
             LogType.ANALYTICS_DB.log("Database write complete!");
         }
     }
 
     public static class ChatModerator {
 
-        // Processes messages in a parallel pool (ideal for heavy content filtering)
         @Commando(mode = DispatchMode.ASYNC_PARALLEL)
         public void filterMessage(ChatMessageEvent event) {
             LogType.MODERATOR.log("Checking message from " + event.sender + " for spam...");
@@ -86,21 +86,20 @@ public class Main {
         }
     }
 
-    // Main loop
     public static void main(String[] args) {
         LogType.SYSTEM.log("Initializing Systems");
 
         AnalyticsService analytics = new AnalyticsService();
         ChatModerator moderator = new ChatModerator();
 
-        // Register services within the Flora event bus
-        FloraAutomation.register(analytics);
-        FloraAutomation.register(moderator);
+        Flora.register(analytics);
+        Flora.register(moderator);
+        Subscription audit = UserLoginEvent.BUS.subscribe(
+                new Listener<>(event -> LogType.ACTION.log("Audit: " + event.username)));
 
-        System.out.println(); // Clean line break
+        System.out.println();
         LogType.SYSTEM.log("Simulating Actions");
 
-        // Posting events to the bus
         LogType.ACTION.log("Posting UserLoginEvent...");
         UserLoginEvent.BUS.post(new UserLoginEvent("Alex", "192.168.1.15"));
 
@@ -108,16 +107,17 @@ public class Main {
         ChatMessageEvent.BUS.post(new ChatMessageEvent("Alex", "Hey everyone! This is spam :)"));
         ChatMessageEvent.BUS.post(new ChatMessageEvent("Maria", "Hi, Alex!"));
 
-        // Wait momentarily to allow async threads to finish processing before JVM shutdown
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException ignored) {}
+        if (!Flora.awaitQuiescence(2, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Flora workers did not become idle");
+        }
 
-        System.out.println(); // Clean line break
+        System.out.println();
         LogType.SYSTEM.log("Shutting Down Systems");
 
-        FloraAutomation.unregister(analytics);
-        FloraAutomation.unregister(moderator);
+        Flora.unregister(analytics);
+        Flora.unregister(moderator);
+        audit.unsubscribe();
+        Flora.shutdown();
         LogType.ACTION.log("Services successfully unregistered.");
     }
 }

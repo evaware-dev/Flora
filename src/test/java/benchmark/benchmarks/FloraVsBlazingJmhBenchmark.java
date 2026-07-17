@@ -11,8 +11,11 @@ import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
+import sweetie.evaware.flora.Flora;
 import sweetie.evaware.flora.api.DispatchMode;
+import sweetie.evaware.flora.api.Subscription;
 import sweetie.evaware.flora.core.FloraBus;
 import sweetie.evaware.flora.core.Listener;
 
@@ -30,6 +33,7 @@ public class FloraVsBlazingJmhBenchmark {
 
     private FloraBus<TestEvent> flora;
     private BlazingBus<TestEvent> blazing;
+    private Subscription[] globalSubscriptions;
     private TestEvent event;
 
     @Setup
@@ -37,8 +41,11 @@ public class FloraVsBlazingJmhBenchmark {
         event = new TestEvent();
 
         flora = new FloraBus<>();
+        globalSubscriptions = new Subscription[listeners];
         for (int i = 0; i < listeners; i++) {
             flora.subscribe(new Listener<>(0, item -> item.value++, DispatchMode.SYNC));
+            globalSubscriptions[i] = Flora.getBus(TestEvent.class)
+                    .subscribe(new Listener<>(0, item -> item.value++, DispatchMode.SYNC));
         }
 
         blazing = new BlazingBus<>(listeners);
@@ -46,6 +53,13 @@ public class FloraVsBlazingJmhBenchmark {
             blazing.subscribe(item -> item.value++);
         }
         blazing.seal();
+    }
+
+    @TearDown
+    public void tearDown() {
+        for (Subscription subscription : globalSubscriptions) {
+            subscription.unsubscribe();
+        }
     }
 
     @Benchmark
@@ -59,6 +73,13 @@ public class FloraVsBlazingJmhBenchmark {
     public int floraPost() {
         event.value = 0;
         flora.post(event);
+        return event.value;
+    }
+
+    @Benchmark
+    public int floraGlobalPost() {
+        event.value = 0;
+        Flora.post(event);
         return event.value;
     }
 

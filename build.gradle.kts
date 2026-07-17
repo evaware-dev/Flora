@@ -3,6 +3,27 @@ plugins {
     id("maven-publish")
 }
 
+val jitPackBuild = System.getenv("JITPACK") == "true"
+val remoteRepository = runCatching {
+    providers.exec {
+        commandLine("git", "config", "--get", "remote.origin.url")
+    }.standardOutput.asText.get().trim()
+}.getOrNull()?.let { remote ->
+    Regex("github\\.com[/:]([^/]+/[^/]+?)(?:\\.git)?$")
+        .find(remote)
+        ?.groupValues
+        ?.get(1)
+}
+val githubRepository = System.getenv("GITHUB_REPOSITORY")
+    ?: project.findProperty("githubRepository") as String?
+    ?: remoteRepository
+val githubProjectUrl = githubRepository?.let { "https://github.com/$it" }
+val publicationArtifactId = if (jitPackBuild) System.getenv("ARTIFACT") else null
+if (jitPackBuild) {
+    group = System.getenv("GROUP") ?: group
+    version = System.getenv("VERSION") ?: version
+}
+
 repositories {
     mavenCentral()
 }
@@ -22,6 +43,15 @@ tasks.test {
     failOnNoDiscoveredTests = false
 }
 
+tasks.withType<Jar>().configureEach {
+    from(rootProject.file("LICENSE")) {
+        into("META-INF")
+    }
+    from(rootProject.file("NOTICE")) {
+        into("META-INF")
+    }
+}
+
 tasks.register<JavaExec>("benchmark") {
     group = "verification"
     description = "Runs lightweight benchmark harness."
@@ -37,7 +67,7 @@ tasks.register<JavaExec>("jmh") {
     mainClass.set("org.openjdk.jmh.Main")
     classpath = sourceSets.test.get().runtimeClasspath
     args(
-        "benchmark.FloraVsBlazingJmhBenchmark.*",
+        "benchmark.benchmarks.*JmhBenchmark.*",
         "-wi", "3",
         "-i", "5",
         "-f", "1",
@@ -56,22 +86,40 @@ publishing {
     publications {
         create<MavenPublication>("maven") {
             from(components["java"])
-            groupId = "com.github.evaware-dev"
-            artifactId = "flora"
+            groupId = project.group.toString()
+            artifactId = publicationArtifactId ?: rootProject.name
             version = project.version.toString()
+            pom {
+                name.set(rootProject.name.replaceFirstChar(Char::uppercaseChar))
+                description.set("Fast, lightweight event bus for Java")
+                githubProjectUrl?.let(url::set)
+                licenses {
+                    license {
+                        name.set("GNU Lesser General Public License v3.0 only")
+                        url.set("https://www.gnu.org/licenses/lgpl-3.0.html")
+                        distribution.set("repo")
+                    }
+                }
+                if (githubProjectUrl != null) {
+                    scm {
+                        connection.set("scm:git:$githubProjectUrl.git")
+                        developerConnection.set("scm:git:ssh://git@github.com/$githubRepository.git")
+                        url.set(githubProjectUrl)
+                    }
+                }
+            }
         }
     }
 
     repositories {
-        val ghRepo = System.getenv("GITHUB_REPOSITORY")
-        if (ghRepo != null) {
-            maven("https://maven.pkg.github.com/$ghRepo") {
+        if (githubRepository != null) {
+            maven("https://maven.pkg.github.com/$githubRepository") {
                 name = "GitHubPackages"
                 credentials {
                     username = System.getenv("GITHUB_ACTOR")
-                        ?: project.findProperty("systemProp.gpr.user") as String?
+                        ?: System.getProperty("gpr.user")
                     password = System.getenv("GITHUB_TOKEN")
-                        ?: project.findProperty("systemProp.gpr.token") as String?
+                        ?: System.getProperty("gpr.token")
                 }
             }
         }

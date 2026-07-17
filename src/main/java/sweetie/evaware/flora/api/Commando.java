@@ -9,5 +9,6 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 public @interface Commando {
     byte priority() default 1;
+
     DispatchMode mode() default DispatchMode.SYNC;
 }
