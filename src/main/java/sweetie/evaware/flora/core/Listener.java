@@ -1,26 +1,22 @@
 package sweetie.evaware.flora.core;
 
 import sweetie.evaware.flora.api.DispatchMode;
-import sweetie.evaware.flora.core.engine.DispatchEngine;
 
+import java.util.Objects;
 import java.util.function.Consumer;
 
-public record Listener<E>(int priority, Consumer<E> consumer, DispatchMode mode) implements Comparable<Listener<E>> {
+public record Listener<E>(int priority, Consumer<E> callback, DispatchMode mode) {
 
-    public Listener(Consumer<E> consumer, DispatchMode mode) {
-        this(0, consumer, mode);
+    public Listener {
+        Objects.requireNonNull(callback, "callback");
+        Objects.requireNonNull(mode, "mode");
     }
 
-    public Listener(Consumer<E> consumer) {
-        this(0, consumer, DispatchMode.SYNC);
+    public Listener(Consumer<E> callback, DispatchMode mode) {
+        this(0, callback, mode);
     }
 
-    public void accept(E event) {
-        DispatchEngine.dispatchSafely(consumer, event);
-    }
-
-    @Override
-    public int compareTo(Listener<E> o) {
-        return Integer.compare(o.priority(), priority());
+    public Listener(Consumer<E> callback) {
+        this(0, callback, DispatchMode.SYNC);
     }
 }
