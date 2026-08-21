@@ -1,5 +1,6 @@
 package sweetie.evaware.flora.core.engine;
 
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.RejectedExecutionException;
@@ -8,10 +9,47 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class EventWorkerTest {
+    @RepeatedTest(3)
+    void sustainedProducerCannotMissWorkerWakeup() throws Exception {
+        int submissions = 250_000;
+        AtomicInteger calls = new AtomicInteger();
+        AtomicReference<Throwable> producerFailure = new AtomicReference<>();
+        EventWorker worker = new EventWorker("Flora-Saturation-Test", 64, 8, 4, 1_000L,
+                new ListenerInvoker(Throwable::printStackTrace));
+        Thread producer = new Thread(() -> {
+            try {
+                for (int index = 0; index < submissions; index++) {
+                    worker.submit(index, ignored -> calls.incrementAndGet());
+                }
+            } catch (Throwable failure) {
+                producerFailure.set(failure);
+            }
+        });
+
+        try {
+            producer.start();
+            producer.join(10_000L);
+
+            assertFalse(producer.isAlive(), "producer remained blocked by a missed worker wakeup");
+            assertNull(producerFailure.get());
+
+            long deadline = System.nanoTime() + 10_000_000_000L;
+            while (calls.get() != submissions && System.nanoTime() < deadline) {
+                Thread.onSpinWait();
+            }
+            assertEquals(submissions, calls.get());
+        } finally {
+            worker.requestShutdown();
+            worker.join(10_000L);
+        }
+    }
+
     @Test
     void shutdownDrainsClaimedAndQueuedWorkThenRejectsNewWork() throws Exception {
         ListenerInvoker invoker = new ListenerInvoker(Throwable::printStackTrace);

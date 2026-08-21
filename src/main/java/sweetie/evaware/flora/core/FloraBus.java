@@ -28,6 +28,9 @@ public class FloraBus<T> {
         for (Consumer<T> listener : listeners.synchronous) {
             dispatchEngine.invokeSafely(listener, event);
         }
+        if (listeners.onlySynchronous) {
+            return;
+        }
         if (listeners.asynchronous.length != 0) {
             dispatchEngine.dispatchAsync(asynchronousLane, event, listeners.asynchronous);
         }

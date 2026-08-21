@@ -10,11 +10,13 @@ final class ListenerSnapshot<T> {
     final Consumer<T>[] synchronous;
     final Consumer<T>[] asynchronous;
     final Consumer<T>[] parallel;
+    final boolean onlySynchronous;
 
     ListenerSnapshot(Consumer<T>[] synchronous, Consumer<T>[] asynchronous, Consumer<T>[] parallel) {
         this.synchronous = synchronous;
         this.asynchronous = asynchronous;
         this.parallel = parallel;
+        this.onlySynchronous = asynchronous.length == 0 && parallel.length == 0;
     }
 
     @SuppressWarnings("unchecked")
