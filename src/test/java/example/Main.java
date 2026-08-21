@@ -4,8 +4,6 @@ import sweetie.evaware.flora.Flora;
 import sweetie.evaware.flora.api.Commando;
 import sweetie.evaware.flora.api.DispatchMode;
 import sweetie.evaware.flora.api.Subscription;
-import sweetie.evaware.flora.core.FloraBus;
-import sweetie.evaware.flora.core.Listener;
 
 import java.util.concurrent.TimeUnit;
 
@@ -32,8 +30,6 @@ public class Main {
     }
 
     public static class UserLoginEvent {
-        public static final FloraBus<UserLoginEvent> BUS = Flora.getBus(UserLoginEvent.class);
-
         public final String username;
         public final String ipAddress;
 
@@ -44,8 +40,6 @@ public class Main {
     }
 
     public static class ChatMessageEvent {
-        public static final FloraBus<ChatMessageEvent> BUS = Flora.getBus(ChatMessageEvent.class);
-
         public final String sender;
         public final String message;
 
@@ -94,18 +88,18 @@ public class Main {
 
         Flora.register(analytics);
         Flora.register(moderator);
-        Subscription audit = UserLoginEvent.BUS.subscribe(
-                new Listener<>(event -> LogType.ACTION.log("Audit: " + event.username)));
+        Subscription audit = Flora.subscribe(UserLoginEvent.class,
+                event -> LogType.ACTION.log("Audit: " + event.username));
 
         System.out.println();
         LogType.SYSTEM.log("Simulating Actions");
 
         LogType.ACTION.log("Posting UserLoginEvent...");
-        UserLoginEvent.BUS.post(new UserLoginEvent("Alex", "192.168.1.15"));
+        Flora.post(new UserLoginEvent("Alex", "192.168.1.15"));
 
         LogType.ACTION.log("Posting ChatMessageEvent...");
-        ChatMessageEvent.BUS.post(new ChatMessageEvent("Alex", "Hey everyone! This is spam :)"));
-        ChatMessageEvent.BUS.post(new ChatMessageEvent("Maria", "Hi, Alex!"));
+        Flora.post(new ChatMessageEvent("Alex", "Hey everyone! This is spam :)"));
+        Flora.post(new ChatMessageEvent("Maria", "Hi, Alex!"));
 
         if (!Flora.awaitQuiescence(2, TimeUnit.SECONDS)) {
             throw new IllegalStateException("Flora workers did not become idle");

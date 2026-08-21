@@ -29,6 +29,8 @@ class EventWorker extends Thread {
     private final int backpressureSpinLimit;
     private final long backpressureParkNanos;
     private final ListenerInvoker listenerInvoker;
+    // Producer/consumer handshake preventing a publication from racing past park().
+    private volatile boolean parked;
 
     EventWorker(String name, int capacity, int idleSpinLimit, int backpressureSpinLimit,
                 long backpressureParkNanos, ListenerInvoker listenerInvoker) {
@@ -81,7 +83,7 @@ class EventWorker extends Thread {
         int index = (int) (producerIndex & indexMask);
         ARRAY_ELEMENT.set(events, index, event);
         ARRAY_ELEMENT.setRelease(callbacks, index, callback);
-        if (producerIndex == consumerIndex) {
+        if (parked) {
             LockSupport.unpark(this);
         }
     }
@@ -108,9 +110,17 @@ class EventWorker extends Thread {
                 Thread.onSpinWait();
             } else {
                 idleSpins = 0;
-                LockSupport.park();
+                awaitWork();
             }
         }
+    }
+
+    private void awaitWork() {
+        parked = true;
+        if (sequence(consumerSequence) >= producerIndex(sequence(producerState))) {
+            LockSupport.park();
+        }
+        parked = false;
     }
 
     final void requestShutdown() {
