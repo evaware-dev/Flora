@@ -35,6 +35,7 @@ dependencies {
 
     testImplementation("org.openjdk.jmh:jmh-core:1.37")
     testImplementation("org.openjdk.jmh:jmh-generator-annprocess:1.37")
+    testAnnotationProcessor(files(sourceSets.main.get().output))
     testAnnotationProcessor("org.openjdk.jmh:jmh-generator-annprocess:1.37")
 }
 
@@ -81,7 +82,7 @@ tasks.register<JavaExec>("jmh") {
 
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(25))
+        languageVersion.set(JavaLanguageVersion.of(17))
     }
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
