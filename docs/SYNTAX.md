@@ -1,233 +1,227 @@
-# Flora syntax
+# Flora Syntax
 
-Flora is a Java 17 library and can be used from applications running on Java 17, 21, or 25.
-Kotlin projects may target any of those JVM versions as long as the chosen target is supported by
-their Kotlin compiler.
+Flora is an allocation-free event bus for Java 17+ and Kotlin with priority dispatch, annotations, and built-in async worker pools.
 
-## Java
+---
 
-### Lambda subscription
+# Java
 
-This is the recommended API when a class has one or a few handlers. No annotation or stored bus is
-required.
+## Lambda Subscriptions
 
 ```java
-Subscription subscription = Flora.subscribe(PlayerEvent.class, event -> {
-    handle(event);
+Subscription sub = Flora.subscribe(UserLoginEvent.class, event -> {
+    System.out.println("User: " + event.username());
 });
 
-Flora.post(new PlayerEvent());
+Flora.post(new UserLoginEvent("Alex"));
+sub.unsubscribe();
 ```
 
-Keep the returned subscription for the lifetime of its owner and close it when that owner is
-disabled or destroyed:
+### Priority and Dispatch Mode
 
 ```java
-subscription.close();
-```
-
-`close()` and `unsubscribe()` are equivalent. Calling either one more than once is safe.
-
-### Priority and dispatch mode
-
-```java
-Subscription subscription = Flora.subscribe(
-        PlayerEvent.class,
-        10,
-        DispatchMode.ASYNC,
-        event -> handle(event)
+Subscription sub = Flora.subscribe(
+    UserLoginEvent.class,
+    100,                     // Priority: higher runs first (default: 0)
+    DispatchMode.ASYNC,      // SYNC (default), ASYNC, ASYNC_PARALLEL
+    event -> saveToDatabase(event)
 );
 ```
 
-Higher priority values run first. Available modes are:
+- `SYNC`: executes inline on the posting thread.
+- `ASYNC`: executes in order on an asynchronous ring-buffer lane.
+- `ASYNC_PARALLEL`: distributes concurrently across worker threads.
 
-- `SYNC` — invokes the listener on the posting thread before `post` returns.
-- `ASYNC` — preserves ordering on the event type's asynchronous lane.
-- `ASYNC_PARALLEL` — allows handlers to run concurrently.
-
-Asynchronous queues are bounded. If a queue is full, the producer applies backpressure instead of
-silently dropping an event.
-
-### Annotation handlers
-
-Annotations are convenient for services containing several handlers:
+## Annotations (`@Commando`)
 
 ```java
-public final class PlayerService {
-    @Commando(priority = 10, mode = DispatchMode.SYNC)
-    public void onPlayer(PlayerEvent event) {
-        handle(event);
+public class PlayerService {
+    @Commando(priority = 10)
+    public void onLogin(UserLoginEvent event) {
+        log(event);
+    }
+
+    @Commando(mode = DispatchMode.ASYNC)
+    public void onMessage(ChatMessageEvent event) {
+        process(event);
     }
 }
-```
 
-Register and unregister the service itself:
-
-```java
+// Instance registration
 PlayerService service = new PlayerService();
-
 Flora.register(service);
 Flora.unregister(service);
 ```
 
-A handler must accept exactly one event parameter. Annotated handlers and lambda subscriptions use
-the same bus and may be mixed.
-
-### Direct bus
-
-Use direct access only for a measured hot path or when a separately owned bus is needed:
+### Static Handlers
 
 ```java
-FloraBus<PlayerEvent> bus = Flora.getBus(PlayerEvent.class);
-Subscription subscription = bus.subscribe(new Listener<>(event -> handle(event)));
-
-bus.post(new PlayerEvent());
-subscription.close();
-```
-
-`Flora.getBus(PlayerEvent.class)` returns the canonical bus also used by `Flora.post`, annotations,
-and lambda subscriptions. Constructing `new FloraBus<>()` creates an independent bus.
-
-### Generated accessor
-
-Annotate a public, non-generic event type:
-
-```java
-@EventType
-public final class PlayerEvent {
-}
-```
-
-Enable Flora as both the dependency and annotation processor:
-
-```groovy
-dependencies {
-    implementation 'sweetie.evaware:flora:VERSION'
-    annotationProcessor 'sweetie.evaware:flora:VERSION'
-}
-```
-
-The processor creates `PlayerEventBus`:
-
-```java
-Subscription subscription = PlayerEventBus.BUS.subscribe(
-        new Listener<>(event -> handle(event))
-);
-
-PlayerEventBus.post(new PlayerEvent());
-```
-
-The generated accessor caches the canonical bus, avoiding the event-class lookup during posting.
-
-## Kotlin
-
-### Java API from Kotlin
-
-Kotlin lambdas are converted to the Java `Consumer` interface:
-
-```kotlin
-val subscription = Flora.subscribe(PlayerEvent::class.java) { event ->
-    handle(event)
-}
-
-Flora.post(PlayerEvent())
-subscription.close()
-```
-
-Priority and dispatch mode use the same overload as Java:
-
-```kotlin
-val subscription = Flora.subscribe(
-    PlayerEvent::class.java,
-    10,
-    DispatchMode.ASYNC
-) { event ->
-    handle(event)
-}
-```
-
-### Optional reified helper
-
-Java cannot infer the runtime event class from a generic lambda. A Kotlin application can hide the
-class token with its own small inline helper while Flora itself remains entirely Java:
-
-```kotlin
-inline fun <reified E : Any> subscribe(
-    priority: Int = 0,
-    mode: DispatchMode = DispatchMode.SYNC,
-    noinline handler: (E) -> Unit
-): Subscription = Flora.subscribe(
-    E::class.java,
-    priority,
-    mode,
-    java.util.function.Consumer(handler)
-)
-```
-
-Usage:
-
-```kotlin
-val subscription = subscribe<PlayerEvent> { event ->
-    handle(event)
-}
-```
-
-The helper improves syntax but does not materially change dispatch performance.
-
-### Suspend handlers
-
-A `suspend` function is not a synchronous Java `Consumer`, so it is deliberately not accepted
-directly. Launch it explicitly from a lifecycle-owned coroutine scope:
-
-```kotlin
-val subscription = Flora.subscribe(PlayerEvent::class.java) { event ->
-    serviceScope.launch {
-        handleSuspending(event)
+public class SecurityModule {
+    @Commando(priority = 100)
+    public static void onAttack(PlayerAttackEvent event) {
+        if ("friendly-npc".equals(event.target())) {
+            event.setCancelled(true);
+        }
     }
 }
+
+Flora.register(SecurityModule.class);
+Flora.unregister(SecurityModule.class);
 ```
 
-The owner of `serviceScope` remains responsible for cancellation and exception handling. Avoid a
-global scope. Flora's `ASYNC` modes use Java worker threads; they do not turn a listener into a
-coroutine.
+## Cancellation (`FloraConfigurator`)
 
-### Generated accessors with kapt
-
-```kotlin
-plugins {
-    kotlin("kapt")
-}
-
-dependencies {
-    implementation("sweetie.evaware:flora:VERSION")
-    kapt("sweetie.evaware:flora:VERSION")
-}
-```
-
-The generated Java accessor can then be used normally from Kotlin:
-
-```kotlin
-val subscription = PlayerEventBus.BUS.subscribe(
-    Listener { event -> handle(event) }
-)
-
-PlayerEventBus.post(PlayerEvent())
-```
-
-## Errors and shutdown
-
-Listener failures are isolated and passed to the configured error handler:
+Register cancellation predicates dynamically for any class or interface without forced marker interfaces:
 
 ```java
-Flora.setErrorHandler(Throwable::printStackTrace);
+FloraConfigurator.registerCancellation(PlayerAttackEvent.class, PlayerAttackEvent::isCancelled);
+
+// Or for an interface:
+FloraConfigurator.registerCancellation(Cancellable.class, Cancellable::isCancelled);
 ```
 
-Applications using asynchronous modes can wait for queued work and shut the shared engine down:
+When cancelled, subsequent lower-priority listeners are short-circuited immediately.
+
+## Custom Annotations & Error Handling
+
+```java
+// Register custom annotation
+FloraConfigurator.registerAnnotation(MyHandler.class);
+
+// Error handling
+FloraConfigurator.setErrorHandler(error -> logger.error("Dispatch error", error));
+
+// Throw exceptions immediately
+FloraConfigurator.setFailFast(true);
+```
+
+## Direct Bus & `@EventType`
+
+```java
+// Direct bus access
+FloraBus<UserLoginEvent> bus = Flora.getBus(UserLoginEvent.class);
+bus.subscribe(event -> handle(event));
+bus.post(new UserLoginEvent("Alex"));
+
+// Generated accessor (@EventType)
+@EventType
+public record UserLoginEvent(String username) {}
+
+UserLoginEventBus.post(new UserLoginEvent("Alex"));
+UserLoginEventBus.BUS.subscribe(event -> handle(event));
+```
+
+## Lifecycle & Shutdown
 
 ```java
 Flora.awaitQuiescence(5, TimeUnit.SECONDS);
 Flora.shutdown();
 ```
 
-`shutdown()` is application-wide and should normally be called only during final application
-shutdown, not when an individual service is disabled.
+---
+
+# Kotlin
+
+## Lambda Subscriptions
+
+```kotlin
+val sub = Flora.subscribe(UserLoginEvent::class.java) { event ->
+    println("User: ${event.username}")
+}
+
+Flora.post(UserLoginEvent("Alex"))
+sub.unsubscribe()
+```
+
+### Reified Helper
+
+```kotlin
+inline fun <reified T : Any> subscribe(
+    priority: Int = 0,
+    mode: DispatchMode = DispatchMode.SYNC,
+    noinline listener: (T) -> Unit
+): Subscription = Flora.subscribe(T::class.java, priority, mode, listener)
+
+val sub = subscribe<UserLoginEvent>(priority = 10) { event ->
+    println(event.username)
+}
+```
+
+## Annotations (`@Commando`)
+
+```kotlin
+class PlayerService {
+    @Commando(priority = 10)
+    fun onLogin(event: UserLoginEvent) {
+        println(event.username)
+    }
+
+    @Commando(mode = DispatchMode.ASYNC)
+    fun onMessage(event: ChatMessageEvent) {
+        process(event)
+    }
+}
+
+val service = PlayerService()
+Flora.register(service)
+Flora.unregister(service)
+```
+
+### Singleton & Companion Objects
+
+```kotlin
+object SecurityModule {
+    @JvmStatic
+    @Commando(priority = 100)
+    fun onAttack(event: PlayerAttackEvent) {
+        if (event.target == "friendly-npc") {
+            event.cancelled = true
+        }
+    }
+}
+
+Flora.register(SecurityModule::class.java)
+Flora.unregister(SecurityModule::class.java)
+```
+
+## Cancellation (`FloraConfigurator`)
+
+```kotlin
+FloraConfigurator.registerCancellation(PlayerAttackEvent::class.java) { it.cancelled }
+
+// Reified helper
+inline fun <reified T : Any> registerCancellation(noinline predicate: (T) -> Boolean) {
+    FloraConfigurator.registerCancellation(T::class.java, predicate)
+}
+
+registerCancellation<PlayerAttackEvent> { it.cancelled }
+```
+
+## Coroutines Integration
+
+To call suspending functions from a listener, bridge them via a lifecycle-scoped `CoroutineScope`:
+
+```kotlin
+Flora.subscribe(ChatMessageEvent::class.java) { event ->
+    serviceScope.launch {
+        processSuspending(event)
+    }
+}
+```
+
+## Direct Bus & `@EventType`
+
+```kotlin
+@EventType
+class UserLoginEvent(val username: String)
+
+UserLoginEventBus.post(UserLoginEvent("Alex"))
+UserLoginEventBus.BUS.subscribe { handle(it) }
+```
+
+## Lifecycle & Shutdown
+
+```kotlin
+Flora.awaitQuiescence(5, TimeUnit.SECONDS)
+Flora.shutdown()
+```

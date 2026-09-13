@@ -1,101 +1,18 @@
 # Flora
 
-Fast and lightweight event bus for Java with priority dispatch, annotations, and built-in asynchronous modes.
+Fast, lightweight, and allocation-free event bus for Java 17+ with priority dispatch, annotations, and built-in ring-buffer asynchronous workers.
 
 ## Features
 
-- Exact-type event routing with allocation-free synchronous dispatch.
-- Ordered `ASYNC` and concurrent `ASYNC_PARALLEL` modes.
-- Priority-based listeners with immutable snapshots and lock-free reads.
-- Annotation registration through `@Commando` and `Flora.register()`.
-- Compile-time generation of direct, type-safe bus accessors with `@EventType`.
-- Bounded worker queues with backpressure instead of dropped events.
-- Pure Java 17 with no runtime dependencies.
+- **Zero-allocation hot paths**: fast synchronous dispatch with prebuilt arrays.
+- **Asynchronous modes**: ordered `ASYNC` lane and concurrent `ASYNC_PARALLEL` workers with progressive backpressure.
+- **Priority dispatch**: deterministic listener ordering with short-circuit cancellation.
+- **Flexible cancellation**: dynamic cancellation registration via `FloraConfigurator` without forced marker interfaces.
+- **Annotations & Lambdas**: `@Commando` method handlers and inline lambda subscriptions share canonical buses.
+- **Compile-time generation**: optional direct bus accessors with `@EventType`.
+- **Pure Java 17+**: zero external runtime dependencies.
 
-Flora runs on Java 17, 21, and 25. It is built with JDK 25 and Gradle 9.5.1 using
-`--release 17`, so consumers do not need to target Java 25.
-
-## Usage
-
-See the compile-ready [example](src/test/java/example/Main.java) for manual listeners, annotations, priorities, and asynchronous dispatch.
-The complete Java and Kotlin syntax reference is available in [docs/SYNTAX.md](docs/SYNTAX.md).
-
-### Lambda subscriptions
-
-No annotation or manually declared bus field is required:
-
-```java
-Subscription subscription = Flora.subscribe(UserLoginEvent.class, event -> audit(event));
-Flora.post(new UserLoginEvent());
-
-subscription.close();
-```
-
-Priority and dispatch mode are optional:
-
-```java
-Subscription subscription = Flora.subscribe(
-        UserLoginEvent.class,
-        10,
-        DispatchMode.ASYNC,
-        event -> audit(event)
-);
-```
-
-The same Java API receives Kotlin lambdas through normal JVM SAM conversion:
-
-```kotlin
-val subscription = Flora.subscribe(UserLoginEvent::class.java) { event ->
-    audit(event)
-}
-```
-
-Lambda subscriptions and `@Commando` handlers use the same canonical bus for an event type and may
-be mixed safely. Keep the returned `Subscription` and unsubscribe it when the owning component is
-disabled or destroyed.
-
-## Generated bus accessors
-
-Annotate a public, non-generic event type and enable Flora as an annotation processor:
-
-```java
-@EventType
-public final class UserLoginEvent {
-}
-```
-
-```groovy
-dependencies {
-    implementation 'sweetie.evaware:flora:VERSION'
-    annotationProcessor 'sweetie.evaware:flora:VERSION'
-}
-```
-
-Flora generates `UserLoginEventBus`. Its public `BUS` field caches the exact bus once, so posting
-does not perform the runtime-class lookup used by `Flora.post(Object)`:
-
-```java
-UserLoginEventBus.BUS.subscribe(new Listener<>(event -> audit(event)));
-UserLoginEventBus.post(new UserLoginEvent());
-```
-
-Kotlin/JVM can use the same generated accessor through kapt:
-
-```kotlin
-plugins {
-    kotlin("kapt")
-}
-
-dependencies {
-    implementation("sweetie.evaware:flora:VERSION")
-    kapt("sweetie.evaware:flora:VERSION")
-}
-```
-
-Regular Kotlin functions and inline call sites work through the normal JVM ABI. A `suspend`
-function is not a synchronous `Consumer` and is intentionally not accepted as a `@Commando`
-handler. Bridge one explicitly from a lifecycle-owned `CoroutineScope` when coroutine cancellation
-and failure semantics are required; do not use an implicit or global scope.
+## Installation
 
 ### GitHub Packages
 
@@ -112,6 +29,7 @@ repositories {
 
 dependencies {
     implementation 'sweetie.evaware:flora:VERSION'
+    annotationProcessor 'sweetie.evaware:flora:VERSION' // optional, for @EventType code generation
 }
 ```
 
@@ -124,18 +42,14 @@ repositories {
 
 dependencies {
     implementation 'com.github.evaware-dev:Flora:TAG'
+    annotationProcessor 'com.github.evaware-dev:Flora:TAG' // optional, for @EventType code generation
 }
 ```
 
-JitPack coordinates are derived from the GitHub owner and repository name and therefore differ from GitHub Packages coordinates.
+## Documentation & Examples
 
-## Dispatch behavior
-
-- Events are dispatched by exact runtime class.
-- Each bus is assigned to one ordered `ASYNC` worker lane.
-- `ASYNC_PARALLEL` listener order is intentionally unspecified.
-- Asynchronous listeners may finish after `post()` returns.
-- Removing a subscription does not cancel callbacks that are already queued.
+- **[docs/SYNTAX.md](docs/SYNTAX.md)**: complete syntax reference separated for **Java** and **Kotlin**.
+- **[example/](example/src/main/java/example/Main.java)**: runnable end-to-end sample application (`./gradlew :example:run`).
 
 ## License
 
