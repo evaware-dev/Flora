@@ -3,3 +3,6 @@ plugins {
 }
 
 rootProject.name = "flora"
+
+include("benchmarks")
+include("example")

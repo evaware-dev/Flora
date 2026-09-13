@@ -1,5 +1,7 @@
 package sweetie.evaware.flora.core.engine;
 
+import sweetie.evaware.flora.FloraConfigurator;
+
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.RejectedExecutionException;
@@ -28,12 +30,10 @@ class EventWorker extends Thread {
     private final int idleSpinLimit;
     private final int backpressureSpinLimit;
     private final long backpressureParkNanos;
-    private final ListenerInvoker listenerInvoker;
-    // Producer/consumer handshake preventing a publication from racing past park().
     private volatile boolean parked;
 
     EventWorker(String name, int capacity, int idleSpinLimit, int backpressureSpinLimit,
-                long backpressureParkNanos, ListenerInvoker listenerInvoker) {
+                long backpressureParkNanos) {
         super(name);
         if (capacity < 2 || Integer.bitCount(capacity) != 1) {
             throw new IllegalArgumentException("capacity must be a power of two and at least 2");
@@ -44,21 +44,16 @@ class EventWorker extends Thread {
         this.idleSpinLimit = idleSpinLimit;
         this.backpressureSpinLimit = backpressureSpinLimit;
         this.backpressureParkNanos = backpressureParkNanos;
-        this.listenerInvoker = listenerInvoker;
         setDaemon(true);
         start();
     }
 
     final <T> void submit(T event, Consumer<T>[] listeners) {
-        enqueueCallback(event, listeners);
+        publish(event, listeners);
     }
 
     final <T> void submit(T event, Consumer<T> listener) {
-        enqueueCallback(event, listener);
-    }
-
-    private void enqueueCallback(Object event, Object callback) {
-        publish(event, callback);
+        publish(event, listener);
     }
 
     private void publish(Object event, Object callback) {
@@ -126,7 +121,10 @@ class EventWorker extends Thread {
     final void requestShutdown() {
         for (;;) {
             long state = sequence(producerState);
-            if (isClosed(state) || SEQUENCE_VALUE.compareAndSet(producerState, state, state | CLOSED_MASK)) {
+            if (isClosed(state)) {
+                return;
+            }
+            if (SEQUENCE_VALUE.compareAndSet(producerState, state, state | CLOSED_MASK)) {
                 break;
             }
         }
@@ -161,13 +159,30 @@ class EventWorker extends Thread {
     @SuppressWarnings("unchecked")
     private <T> void invoke(Object callback, Object event) {
         T typedEvent = (T) event;
+        Consumer<Throwable> handler = FloraConfigurator.getExceptionHandler();
         if (callback instanceof Consumer<?>[] listeners) {
             for (Consumer<?> listener : listeners) {
-                listenerInvoker.invoke((Consumer<T>) listener, typedEvent);
+                invokeListener((Consumer<T>) listener, typedEvent, handler);
             }
             return;
         }
-        listenerInvoker.invoke((Consumer<T>) callback, typedEvent);
+        invokeListener((Consumer<T>) callback, typedEvent, handler);
+    }
+
+    private static <T> void invokeListener(Consumer<T> listener, T event, Consumer<Throwable> handler) {
+        try {
+            listener.accept(event);
+        } catch (Throwable t) {
+            if (t instanceof VirtualMachineError vme) throw vme;
+            if (handler != null) {
+                try {
+                    handler.accept(t);
+                } catch (Throwable ht) {
+                    t.addSuppressed(ht);
+                    t.printStackTrace();
+                }
+            }
+        }
     }
 
     private void rejectIfStopped(long state) {

@@ -1,4 +1,4 @@
-package sweetie.evaware.flora;
+package sweetie.evaware.flora.internal;
 
 import java.lang.invoke.CallSite;
 import java.lang.invoke.LambdaMetafactory;
@@ -10,18 +10,20 @@ import java.lang.reflect.Modifier;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
-final class HandlerLambdaFactory {
+public final class LambdaFactory {
     private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
-    private static final ClassValue<MethodHandles.Lookup> PRIVATE_LOOKUPS = new ClassValue<>() {
+
+    private static final ClassValue<MethodHandles.Lookup> LOOKUPS = new ClassValue<>() {
         @Override
         protected MethodHandles.Lookup computeValue(Class<?> type) {
             try {
                 return MethodHandles.privateLookupIn(type, LOOKUP);
-            } catch (IllegalAccessException exception) {
-                throw new IllegalStateException("Flora: unable to access " + type.getName(), exception);
+            } catch (IllegalAccessException e) {
+                throw new IllegalStateException("Unable to access " + type.getName(), e);
             }
         }
     };
+
     private static final ClassValue<ConcurrentHashMap<Method, MethodHandle>> FACTORIES = new ClassValue<>() {
         @Override
         protected ConcurrentHashMap<Method, MethodHandle> computeValue(Class<?> type) {
@@ -29,30 +31,30 @@ final class HandlerLambdaFactory {
         }
     };
 
-    private HandlerLambdaFactory() {
+    private LambdaFactory() {
     }
 
     @SuppressWarnings("unchecked")
-    static <T> Consumer<T> bind(Object instance, Method method) {
+    public static <T> Consumer<T> createConsumer(Object instance, Method method) {
         try {
             MethodHandle factory = FACTORIES.get(method.getDeclaringClass())
-                    .computeIfAbsent(method, HandlerLambdaFactory::createFactory);
+                    .computeIfAbsent(method, LambdaFactory::buildFactory);
             return (Consumer<T>) factory.invokeExact(instance);
-        } catch (RuntimeException | Error failure) {
-            throw failure;
         } catch (Throwable failure) {
-            throw new IllegalStateException("Flora: unable to bind " + method.getName(), failure);
+            if (failure instanceof RuntimeException re) throw re;
+            if (failure instanceof Error err) throw err;
+            throw new IllegalStateException("Unable to bind " + method.getName(), failure);
         }
     }
 
-    private static MethodHandle createFactory(Method method) {
+    private static MethodHandle buildFactory(Method method) {
         try {
             Class<?> owner = method.getDeclaringClass();
             Class<?> eventType = method.getParameterTypes()[0];
-            MethodHandles.Lookup lookup = PRIVATE_LOOKUPS.get(owner);
+            MethodHandles.Lookup lookup = LOOKUPS.get(owner);
             MethodHandle target = lookup.unreflect(method);
-            boolean staticMethod = Modifier.isStatic(method.getModifiers());
-            MethodType invokedType = staticMethod
+            boolean isStatic = Modifier.isStatic(method.getModifiers());
+            MethodType invokedType = isStatic
                     ? MethodType.methodType(Consumer.class)
                     : MethodType.methodType(Consumer.class, owner);
             CallSite site = LambdaMetafactory.metafactory(
@@ -64,14 +66,14 @@ final class HandlerLambdaFactory {
                     MethodType.methodType(void.class, eventType)
             );
             MethodHandle factory = site.getTarget();
-            if (staticMethod) {
+            if (isStatic) {
                 factory = MethodHandles.dropArguments(factory, 0, Object.class);
             }
             return factory.asType(MethodType.methodType(Consumer.class, Object.class));
-        } catch (RuntimeException | Error failure) {
-            throw failure;
         } catch (Throwable failure) {
-            throw new IllegalStateException("Flora: unable to create handler for " + method.getName(), failure);
+            if (failure instanceof RuntimeException re) throw re;
+            if (failure instanceof Error err) throw err;
+            throw new IllegalStateException("Unable to create factory for " + method.getName(), failure);
         }
     }
 }

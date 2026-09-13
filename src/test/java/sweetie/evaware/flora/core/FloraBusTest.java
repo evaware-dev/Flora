@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import sweetie.evaware.flora.Flora;
+import sweetie.evaware.flora.FloraConfigurator;
 import sweetie.evaware.flora.api.DispatchMode;
 import sweetie.evaware.flora.api.Subscription;
 
@@ -20,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class FloraBusTest {
     @AfterEach
     void restoreErrorHandler() {
-        Flora.setErrorHandler(Throwable::printStackTrace);
+        FloraConfigurator.setErrorHandler(Throwable::printStackTrace);
     }
 
     @Test
@@ -81,7 +82,7 @@ class FloraBusTest {
         FloraBus<Object> bus = new FloraBus<>();
         List<Throwable> failures = new ArrayList<>();
         AtomicInteger calls = new AtomicInteger();
-        Flora.setErrorHandler(failures::add);
+        FloraConfigurator.setErrorHandler(failures::add);
 
         bus.subscribe(new Listener<>(ignored -> {
             throw new IllegalStateException("boom");
