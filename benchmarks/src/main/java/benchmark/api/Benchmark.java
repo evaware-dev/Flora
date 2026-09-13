@@ -25,6 +25,6 @@ public abstract class Benchmark<T extends BenchmarkEvent> implements IBenchmark 
     protected abstract void post(T event);
 
     protected final void consume(T event) {
-        BenchmarkSupport.consumeFast(event.sink, event.payload);
+        event.sink.consume(event.payload);
     }
 }

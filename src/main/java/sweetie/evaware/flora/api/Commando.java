@@ -8,7 +8,7 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 public @interface Commando {
-    byte priority() default 1;
+    int priority() default 0;
 
     DispatchMode mode() default DispatchMode.SYNC;
 }

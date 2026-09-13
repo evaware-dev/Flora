@@ -13,13 +13,11 @@ public final class DispatchEngine {
     private static final long IDLE_POLL_NANOS = 100_000L;
     private static final DispatchEngine DEFAULT_ENGINE = new DispatchEngine(DispatchConfig.defaults());
 
-    private final ListenerInvoker listenerInvoker;
     private final WorkerPool asyncWorkers;
     private final WorkerPool parallelWorkers;
 
     public DispatchEngine(DispatchConfig config) {
         Objects.requireNonNull(config, "config");
-        listenerInvoker = new ListenerInvoker(Throwable::printStackTrace);
         asyncWorkers = createPool(ASYNC_THREAD_PREFIX, config.asyncLaneCount(),
                 config.asyncQueueCapacity(), config);
         parallelWorkers = createPool(PARALLEL_THREAD_PREFIX, config.parallelLaneCount(),
@@ -42,14 +40,6 @@ public final class DispatchEngine {
         parallelWorkers.distribute(event, listeners);
     }
 
-    public void setListenerExceptionHandler(Consumer<Throwable> exceptionHandler) {
-        listenerInvoker.setExceptionHandler(exceptionHandler);
-    }
-
-    public <T> void invokeSafely(Consumer<T> listener, T event) {
-        listenerInvoker.invoke(listener, event);
-    }
-
     public void shutdown() {
         asyncWorkers.shutdownGracefully();
         parallelWorkers.shutdownGracefully();
@@ -60,25 +50,24 @@ public final class DispatchEngine {
         if (timeout < 0) {
             throw new IllegalArgumentException("timeout must be non-negative");
         }
-
-        long timeoutNanos = unit.toNanos(timeout);
-        long start = System.nanoTime();
-        while (!isIdle()) {
-            long remaining = timeoutNanos - (System.nanoTime() - start);
-            if (remaining <= 0) {
-                return false;
+        long deadlineNanos = System.nanoTime() + unit.toNanos(timeout);
+        while (System.nanoTime() < deadlineNanos) {
+            if (asyncWorkers.isIdle() && parallelWorkers.isIdle()) {
+                return true;
             }
-            LockSupport.parkNanos(Math.min(IDLE_POLL_NANOS, remaining));
+            LockSupport.parkNanos(IDLE_POLL_NANOS);
         }
-        return true;
-    }
-
-    private WorkerPool createPool(String threadPrefix, int lanes, int capacity, DispatchConfig config) {
-        return new WorkerPool(threadPrefix, lanes, capacity, config.idleSpinLimit(),
-                config.backpressureSpinLimit(), config.backpressureParkNanos(), listenerInvoker);
-    }
-
-    private boolean isIdle() {
         return asyncWorkers.isIdle() && parallelWorkers.isIdle();
+    }
+
+    private static WorkerPool createPool(String prefix, int lanes, int queueCapacity, DispatchConfig config) {
+        return new WorkerPool(
+                prefix,
+                lanes,
+                queueCapacity,
+                config.idleSpinLimit(),
+                config.backpressureSpinLimit(),
+                config.backpressureParkNanos()
+        );
     }
 }

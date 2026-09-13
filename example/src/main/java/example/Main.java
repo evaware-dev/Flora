@@ -1,6 +1,7 @@
 package example;
 
 import sweetie.evaware.flora.Flora;
+import sweetie.evaware.flora.FloraConfigurator;
 import sweetie.evaware.flora.api.Commando;
 import sweetie.evaware.flora.api.DispatchMode;
 import sweetie.evaware.flora.api.Subscription;
@@ -69,6 +70,25 @@ public class Main {
         }
     }
 
+    public static class PlayerAttackEvent {
+        public final String target;
+        public boolean cancelled;
+
+        public PlayerAttackEvent(String target) {
+            this.target = target;
+        }
+    }
+
+    public static class SecurityModule {
+        @Commando(priority = 100)
+        public static void onAttack(PlayerAttackEvent event) {
+            if ("friendly-npc".equals(event.target)) {
+                LogType.ACTION.log("SecurityModule cancelled attack on " + event.target);
+                event.cancelled = true;
+            }
+        }
+    }
+
     public static class ChatModerator {
 
         @Commando(mode = DispatchMode.ASYNC_PARALLEL)
@@ -83,11 +103,14 @@ public class Main {
     public static void main(String[] args) {
         LogType.SYSTEM.log("Initializing Systems");
 
+        FloraConfigurator.registerCancellation(PlayerAttackEvent.class, e -> e.cancelled);
+
         AnalyticsService analytics = new AnalyticsService();
         ChatModerator moderator = new ChatModerator();
 
         Flora.register(analytics);
         Flora.register(moderator);
+        Flora.register(SecurityModule.class);
         Subscription audit = Flora.subscribe(UserLoginEvent.class,
                 event -> LogType.ACTION.log("Audit: " + event.username));
 
@@ -96,6 +119,10 @@ public class Main {
 
         LogType.ACTION.log("Posting UserLoginEvent...");
         Flora.post(new UserLoginEvent("Alex", "192.168.1.15"));
+
+        LogType.ACTION.log("Posting Cancellable PlayerAttackEvent...");
+        PlayerAttackEvent attack = Flora.post(new PlayerAttackEvent("friendly-npc"));
+        LogType.ACTION.log("Attack on friendly-npc cancelled? " + attack.cancelled);
 
         LogType.ACTION.log("Posting ChatMessageEvent...");
         Flora.post(new ChatMessageEvent("Alex", "Hey everyone! This is spam :)"));
@@ -110,6 +137,7 @@ public class Main {
 
         Flora.unregister(analytics);
         Flora.unregister(moderator);
+        Flora.unregister(SecurityModule.class);
         audit.unsubscribe();
         Flora.shutdown();
         LogType.ACTION.log("Services successfully unregistered.");

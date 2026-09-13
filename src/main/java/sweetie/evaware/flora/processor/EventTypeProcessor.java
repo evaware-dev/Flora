@@ -20,10 +20,6 @@ import java.io.IOException;
 import java.io.Writer;
 import java.util.Set;
 
-/**
- * Generates direct event bus accessors. The generated code has no reflective
- * lookup on its posting path and is also consumable from Kotlin through kapt.
- */
 public final class EventTypeProcessor extends AbstractProcessor {
     private Filer filer;
     private Messager messager;

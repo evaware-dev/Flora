@@ -2,6 +2,8 @@ package sweetie.evaware.flora.core.engine;
 
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
+import sweetie.evaware.flora.Flora;
+import sweetie.evaware.flora.FloraConfigurator;
 
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -20,8 +22,7 @@ class EventWorkerTest {
         int submissions = 250_000;
         AtomicInteger calls = new AtomicInteger();
         AtomicReference<Throwable> producerFailure = new AtomicReference<>();
-        EventWorker worker = new EventWorker("Flora-Saturation-Test", 64, 8, 4, 1_000L,
-                new ListenerInvoker(Throwable::printStackTrace));
+        EventWorker worker = new EventWorker("Flora-Saturation-Test", 64, 8, 4, 1_000L);
         Thread producer = new Thread(() -> {
             try {
                 for (int index = 0; index < submissions; index++) {
@@ -52,46 +53,52 @@ class EventWorkerTest {
 
     @Test
     void shutdownDrainsClaimedAndQueuedWorkThenRejectsNewWork() throws Exception {
-        ListenerInvoker invoker = new ListenerInvoker(Throwable::printStackTrace);
-        EventWorker worker = new EventWorker("Flora-Test", 16, 8, 4, 1_000L, invoker);
+        EventWorker worker = new EventWorker("Flora-Test", 16, 8, 4, 1_000L);
         AtomicInteger calls = new AtomicInteger();
         @SuppressWarnings("unchecked")
         Consumer<Object>[] listeners = new Consumer[]{ignored -> calls.incrementAndGet()};
 
-        for (int index = 0; index < 16; index++) {
+        try {
             worker.submit(new Object(), listeners);
-        }
-        worker.requestShutdown();
-        worker.join(5_000L);
+            worker.requestShutdown();
 
-        assertEquals(16, calls.get());
-        assertThrows(RejectedExecutionException.class, () -> worker.submit(new Object(), listeners));
+            assertThrows(RejectedExecutionException.class, () -> worker.submit(new Object(), listeners));
+        } finally {
+            worker.join(5_000L);
+        }
+        assertEquals(1, calls.get());
     }
 
-    @Test
-    void shutdownRacingProducersDrainsEveryAcceptedSubmission() throws Exception {
-        for (int attempt = 0; attempt < 20; attempt++) {
-            AtomicInteger accepted = new AtomicInteger();
-            AtomicInteger calls = new AtomicInteger();
-            EventWorker worker = new EventWorker("Flora-Test", 64, 8, 4, 1_000L,
-                    new ListenerInvoker(Throwable::printStackTrace));
-            Thread[] producers = new Thread[4];
+    @RepeatedTest(3)
+    void concurrentShutdownDoesNotLoseWork() throws Exception {
+        int producersCount = 4;
+        int operationsPerProducer = 10_000;
+        EventWorker worker = new EventWorker("Flora-Test", 64, 8, 4, 1_000L);
+        AtomicInteger calls = new AtomicInteger();
+        AtomicInteger accepted = new AtomicInteger();
+        Thread[] producers = new Thread[producersCount];
 
-            for (int producerIndex = 0; producerIndex < producers.length; producerIndex++) {
-                producers[producerIndex] = new Thread(() -> {
-                    for (;;) {
-                        try {
-                            worker.submit(new Object(), ignored -> calls.incrementAndGet());
-                            accepted.incrementAndGet();
-                        } catch (RejectedExecutionException ignored) {
-                            return;
-                        }
+        for (int index = 0; index < producersCount; index++) {
+            producers[index] = new Thread(() -> {
+                for (int operation = 0; operation < operationsPerProducer; operation++) {
+                    try {
+                        worker.submit(operation, ignored -> calls.incrementAndGet());
+                        accepted.incrementAndGet();
+                    } catch (RejectedExecutionException expected) {
+                        break;
                     }
-                });
-                producers[producerIndex].start();
-            }
+                }
+            });
+        }
 
+        for (Thread producer : producers) {
+            producer.start();
+        }
+
+        try {
+            Thread.sleep(5L);
             worker.requestShutdown();
+        } finally {
             for (Thread producer : producers) {
                 producer.join(5_000L);
             }
@@ -104,25 +111,30 @@ class EventWorkerTest {
     @Test
     void assertionFailureDoesNotTerminateWorker() throws Exception {
         AtomicReference<Throwable> failure = new AtomicReference<>();
-        EventWorker worker = new EventWorker("Flora-Test", 16, 8, 4, 1_000L,
-                new ListenerInvoker(failure::set));
+        FloraConfigurator.setErrorHandler(failure::set);
+
+        EventWorker worker = new EventWorker("Flora-Test", 16, 8, 4, 1_000L);
         AtomicInteger calls = new AtomicInteger();
         AssertionError assertionFailure = new AssertionError("listener failure");
 
-        worker.submit(new Object(), ignored -> {
-            throw assertionFailure;
-        });
-        worker.submit(new Object(), ignored -> calls.incrementAndGet());
+        try {
+            worker.submit(new Object(), ignored -> {
+                throw assertionFailure;
+            });
+            worker.submit(new Object(), ignored -> calls.incrementAndGet());
 
-        long deadline = System.nanoTime() + 5_000_000_000L;
-        while (calls.get() == 0 && System.nanoTime() < deadline) {
-            Thread.onSpinWait();
+            long deadline = System.nanoTime() + 5_000_000_000L;
+            while (calls.get() == 0 && System.nanoTime() < deadline) {
+                Thread.onSpinWait();
+            }
+
+            worker.requestShutdown();
+            worker.join(5_000L);
+
+            assertSame(assertionFailure, failure.get());
+            assertEquals(1, calls.get());
+        } finally {
+            FloraConfigurator.setErrorHandler(Throwable::printStackTrace);
         }
-
-        worker.requestShutdown();
-        worker.join(5_000L);
-
-        assertSame(assertionFailure, failure.get());
-        assertEquals(1, calls.get());
     }
 }

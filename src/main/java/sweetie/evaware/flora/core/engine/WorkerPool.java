@@ -11,19 +11,17 @@ final class WorkerPool {
     private final int idleSpinLimit;
     private final int backpressureSpinLimit;
     private final long backpressureParkNanos;
-    private final ListenerInvoker listenerInvoker;
     private final AtomicReferenceArray<EventWorker> workers;
     private final AtomicInteger nextLane = new AtomicInteger();
     private volatile boolean accepting = true;
 
     WorkerPool(String threadNamePrefix, int laneCount, int queueCapacity, int idleSpinLimit,
-               int backpressureSpinLimit, long backpressureParkNanos, ListenerInvoker listenerInvoker) {
+               int backpressureSpinLimit, long backpressureParkNanos) {
         this.threadNamePrefix = threadNamePrefix;
         this.queueCapacity = queueCapacity;
         this.idleSpinLimit = idleSpinLimit;
         this.backpressureSpinLimit = backpressureSpinLimit;
         this.backpressureParkNanos = backpressureParkNanos;
-        this.listenerInvoker = listenerInvoker;
         this.workers = new AtomicReferenceArray<>(laneCount);
     }
 
@@ -67,31 +65,37 @@ final class WorkerPool {
     }
 
     private EventWorker worker(int lane) {
-        EventWorker worker = workers.get(lane);
-        if (worker != null) {
-            return worker;
+        EventWorker current = workers.get(lane);
+        if (current != null) {
+            return current;
         }
         synchronized (workers) {
             if (!accepting) {
-                throw new RejectedExecutionException("Flora dispatch engine is shut down");
+                throw new RejectedExecutionException("Worker pool is shut down");
             }
-            worker = workers.get(lane);
-            if (worker == null) {
-                worker = new EventWorker(threadNamePrefix + lane, queueCapacity, idleSpinLimit,
-                        backpressureSpinLimit, backpressureParkNanos, listenerInvoker);
-                workers.set(lane, worker);
+            current = workers.get(lane);
+            if (current != null) {
+                return current;
             }
-            return worker;
+            EventWorker created = new EventWorker(
+                    threadNamePrefix + lane,
+                    queueCapacity,
+                    idleSpinLimit,
+                    backpressureSpinLimit,
+                    backpressureParkNanos
+            );
+            workers.set(lane, created);
+            return created;
         }
     }
 
     private void requireValidLane(int lane) {
         if (lane < 0 || lane >= workers.length()) {
-            throw new IllegalArgumentException("lane must be between 0 and " + (workers.length() - 1));
+            throw new IndexOutOfBoundsException("lane: " + lane + ", max: " + workers.length());
         }
     }
 
-    private static int spread(int value) {
-        return value ^ (value >>> 16);
+    private static int spread(int hash) {
+        return (hash ^ (hash >>> 16)) & Integer.MAX_VALUE;
     }
 }

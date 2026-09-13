@@ -32,11 +32,6 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-
-    testImplementation("org.openjdk.jmh:jmh-core:1.37")
-    testImplementation("org.openjdk.jmh:jmh-generator-annprocess:1.37")
-    testAnnotationProcessor(files(sourceSets.main.get().output))
-    testAnnotationProcessor("org.openjdk.jmh:jmh-generator-annprocess:1.37")
 }
 
 tasks.test {
@@ -48,6 +43,10 @@ tasks.withType<JavaCompile>().configureEach {
     options.release.set(17)
 }
 
+tasks.withType<Javadoc>().configureEach {
+    (options as StandardJavadocDocletOptions).addStringOption("Xdoclint:none", "-quiet")
+}
+
 tasks.withType<Jar>().configureEach {
     from(rootProject.file("LICENSE")) {
         into("META-INF")
@@ -57,27 +56,16 @@ tasks.withType<Jar>().configureEach {
     }
 }
 
-tasks.register<JavaExec>("benchmark") {
+tasks.register("benchmark") {
     group = "verification"
     description = "Runs lightweight benchmark harness."
-    dependsOn(tasks.testClasses)
-    mainClass.set("benchmark.Benchmarks")
-    classpath = sourceSets.test.get().runtimeClasspath
+    dependsOn(":benchmarks:benchmark")
 }
 
-tasks.register<JavaExec>("jmh") {
+tasks.register("jmh") {
     group = "verification"
     description = "Runs JMH benchmarks."
-    dependsOn(tasks.testClasses)
-    mainClass.set("org.openjdk.jmh.Main")
-    classpath = sourceSets.test.get().runtimeClasspath
-    args(
-        "benchmark.benchmarks.*JmhBenchmark.*",
-        "-wi", "3",
-        "-i", "5",
-        "-f", "1",
-        "-tu", "ns"
-    )
+    dependsOn(":benchmarks:jmh")
 }
 
 java {

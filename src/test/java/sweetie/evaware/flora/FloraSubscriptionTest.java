@@ -18,8 +18,8 @@ class FloraSubscriptionTest {
         Subscription subscription = Flora.subscribe(LambdaEvent.class, event -> calls.addAndGet(event.value()));
 
         Flora.post(new LambdaEvent(3));
-        subscription.close();
-        subscription.close();
+        subscription.unsubscribe();
+        subscription.unsubscribe();
         Flora.post(new LambdaEvent(7));
 
         assertEquals(3, calls.get());

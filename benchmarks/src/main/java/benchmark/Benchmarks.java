@@ -9,8 +9,8 @@ import java.util.stream.Collectors;
 public class Benchmarks {
     public static void main(String[] args) {
         List<Class<? extends IBenchmark>> benchmarks = List.of(
-                BlazingBusBenchmark.class,
-                FloraBusBenchmark.class
+                FloraBusBenchmark.class,
+                FloraAnnotationBenchmark.class
         );
 
         for (Class<? extends IBenchmark> benchmark : benchmarks) {

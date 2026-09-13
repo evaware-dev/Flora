@@ -1,6 +1,5 @@
 package benchmark.benchmarks;
 
-import benchmark.blazebus.BlazingBus;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -27,57 +26,46 @@ import java.util.concurrent.TimeUnit;
 @Fork(1)
 @Warmup(iterations = 3, time = 500, timeUnit = TimeUnit.MILLISECONDS)
 @Measurement(iterations = 5, time = 500, timeUnit = TimeUnit.MILLISECONDS)
-public class FloraVsBlazingJmhBenchmark {
+public class FloraDispatchJmhBenchmark {
     @Param({"0", "1", "8", "64", "200"})
     public int listeners;
 
-    private FloraBus<TestEvent> flora;
-    private BlazingBus<TestEvent> blazing;
-    private Subscription[] globalSubscriptions;
+    private FloraBus<TestEvent> floraDirect;
+    private Subscription[] floraGlobalSubscriptions;
     private TestEvent event;
 
     @Setup
     public void setup() {
         event = new TestEvent();
 
-        flora = new FloraBus<>();
-        globalSubscriptions = new Subscription[listeners];
+        floraDirect = new FloraBus<>();
         for (int i = 0; i < listeners; i++) {
-            flora.subscribe(new Listener<>(0, item -> item.value++, DispatchMode.SYNC));
-            globalSubscriptions[i] = Flora.getBus(TestEvent.class)
-                    .subscribe(new Listener<>(0, item -> item.value++, DispatchMode.SYNC));
+            floraDirect.subscribe(new Listener<>(0, item -> item.value++, DispatchMode.SYNC));
         }
 
-        blazing = new BlazingBus<>(listeners);
+        floraGlobalSubscriptions = new Subscription[listeners];
         for (int i = 0; i < listeners; i++) {
-            blazing.subscribe(item -> item.value++);
+            floraGlobalSubscriptions[i] = Flora.getBus(TestEvent.class)
+                    .subscribe(new Listener<>(0, item -> item.value++, DispatchMode.SYNC));
         }
-        blazing.seal();
     }
 
     @TearDown
     public void tearDown() {
-        for (Subscription subscription : globalSubscriptions) {
+        for (Subscription subscription : floraGlobalSubscriptions) {
             subscription.unsubscribe();
         }
     }
 
     @Benchmark
-    public int blazingPost() {
+    public int directPost() {
         event.value = 0;
-        blazing.post(event);
+        floraDirect.post(event);
         return event.value;
     }
 
     @Benchmark
-    public int floraPost() {
-        event.value = 0;
-        flora.post(event);
-        return event.value;
-    }
-
-    @Benchmark
-    public int floraGlobalPost() {
+    public int globalPost() {
         event.value = 0;
         Flora.post(event);
         return event.value;
