@@ -1,16 +1,17 @@
 # Flora
 
-Fast, lightweight, and allocation-free event bus for Java 17+ with priority dispatch, annotations, and built-in ring-buffer asynchronous workers.
+Ultra-high-performance, allocation-free event system for Java 17+ and Kotlin with deterministic priority dispatch, polymorphic hierarchy caching, annotations, and built-in lock-free ring-buffer async workers.
 
 ## Features
 
-- **Zero-allocation hot paths**: fast synchronous dispatch with prebuilt arrays.
-- **Asynchronous modes**: ordered `ASYNC` lane and concurrent `ASYNC_PARALLEL` workers with progressive backpressure.
-- **Priority dispatch**: deterministic listener ordering with short-circuit cancellation.
-- **Flexible cancellation**: dynamic cancellation registration via `FloraConfigurator` without forced marker interfaces.
-- **Annotations & Lambdas**: `@Commando` method handlers and inline lambda subscriptions share canonical buses.
-- **Compile-time generation**: optional direct bus accessors with `@EventType`.
-- **Pure Java 17+**: zero external runtime dependencies.
+- **Zero-allocation synchronous hot paths**: Cache-friendly dispatch over prebuilt flat arrays (`Consumer<T>[]`) with no iterator, wrapper, or lambda allocations.
+- **Polymorphic dispatch**: Hierarchical listener resolution with `ClassValue` caching and lock-free per-event invalidation.
+- **Asynchronous ring-buffer workers**: Dedicated ordered `ASYNC` lanes and distributed `ASYNC_PARALLEL` worker pools with progressive backpressure and disruptor-style sequence management.
+- **Deterministic priorities**: Explicit execution ordering with synchronous short-circuit cancellation.
+- **Dynamic cancellation**: Flexible predicate registration via `FloraConfigurator` without mandatory marker interfaces.
+- **Annotations & Lambdas**: Method handlers (`@Commando`) converted to direct JVM call sites via `LambdaMetafactory`, alongside type-safe lambda subscriptions.
+- **Compile-time bus generation**: Optional `@EventType` annotation processor generating direct bus accessors with configurable package and bus naming.
+- **Pure Java 17+**: Zero external runtime dependencies.
 
 ## Installation
 
@@ -18,6 +19,7 @@ Fast, lightweight, and allocation-free event bus for Java 17+ with priority disp
 
 ```groovy
 repositories {
+    mavenCentral()
     maven {
         url 'https://maven.pkg.github.com/evaware-dev/Flora'
         credentials {
@@ -27,9 +29,19 @@ repositories {
     }
 }
 
+ext {
+    // See latest release: https://github.com/evaware-dev/Flora/releases
+    flora_version = 'VERSION'
+}
+
 dependencies {
-    implementation 'sweetie.evaware:flora:VERSION'
-    annotationProcessor 'sweetie.evaware:flora:VERSION' // optional, for @EventType code generation
+    implementation "sweetie.evaware:flora:$flora_version"
+
+    // Optional, for @EventType compile-time generation (Java):
+    annotationProcessor "sweetie.evaware:flora:$flora_version"
+
+    // For Kotlin projects using kapt:
+    // kapt "sweetie.evaware:flora:$flora_version"
 }
 ```
 
@@ -37,12 +49,21 @@ dependencies {
 
 ```groovy
 repositories {
+    mavenCentral()
     maven { url 'https://jitpack.io' }
 }
 
+ext {
+    // See latest release: https://github.com/evaware-dev/Flora/releases
+    flora_version = 'TAG'
+}
+
 dependencies {
-    implementation 'com.github.evaware-dev:Flora:TAG'
-    annotationProcessor 'com.github.evaware-dev:Flora:TAG' // optional, for @EventType code generation
+    implementation "com.github.evaware-dev:Flora:$flora_version"
+
+    // Optional, for @EventType compile-time generation:
+    annotationProcessor "com.github.evaware-dev:Flora:$flora_version"
+    // kapt "com.github.evaware-dev:Flora:$flora_version"
 }
 ```
 
