@@ -8,4 +8,6 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.SOURCE)
 @Target(ElementType.TYPE)
 public @interface EventType {
+    String packageName() default "";
+    String busName() default "";
 }

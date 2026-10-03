@@ -17,7 +17,7 @@ public class FloraBus<T> {
     private static final Comparator<Registration<?>> REGISTRATION_ORDER = (a, b) -> Integer.compare(b.listener.priority(), a.listener.priority());
 
     private final DispatchEngine dispatchEngine;
-    private final int asynchronousLane;
+    private int asynchronousLane = -1;
     private final Runnable onChange;
     final List<Registration<T>> registrations = new ArrayList<>();
 
@@ -42,7 +42,6 @@ public class FloraBus<T> {
 
     public FloraBus(DispatchEngine dispatchEngine, Runnable onChange) {
         this.dispatchEngine = Objects.requireNonNull(dispatchEngine, "dispatchEngine");
-        this.asynchronousLane = dispatchEngine.acquireAsyncLane();
         this.onChange = onChange;
     }
 
@@ -50,9 +49,9 @@ public class FloraBus<T> {
         Objects.requireNonNull(event, "event");
         final Consumer<T>[] sync = this.synchronous;
         final int len = sync.length;
+        final Predicate<Object> canceller = FloraConfigurator.getCanceller(event.getClass());
 
         if (len > 0) {
-            final Predicate<Object> canceller = FloraConfigurator.getCanceller(event.getClass());
             final Consumer<Throwable> handler = this.exceptionHandler != null
                     ? this.exceptionHandler
                     : FloraConfigurator.getExceptionHandler();
@@ -64,7 +63,7 @@ public class FloraBus<T> {
             }
         }
 
-        if (onlySynchronous) {
+        if (onlySynchronous || (canceller != null && canceller.test(event))) {
             return event;
         }
 
@@ -191,6 +190,10 @@ public class FloraBus<T> {
         this.asynchronous = newAsync;
         this.parallel = newParallel;
         this.onlySynchronous = asyncCount == 0 && parallelCount == 0;
+
+        if (asyncCount > 0 && this.asynchronousLane < 0) {
+            this.asynchronousLane = dispatchEngine.acquireAsyncLane();
+        }
 
         if (onChange != null) {
             onChange.run();

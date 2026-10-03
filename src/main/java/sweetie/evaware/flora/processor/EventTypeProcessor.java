@@ -1,6 +1,8 @@
 package sweetie.evaware.flora.processor;
 
+import sweetie.evaware.flora.Flora;
 import sweetie.evaware.flora.api.EventType;
+import sweetie.evaware.flora.core.FloraBus;
 
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Filer;
@@ -69,16 +71,25 @@ public final class EventTypeProcessor extends AbstractProcessor {
             return;
         }
 
+        EventType annotation = eventType.getAnnotation(EventType.class);
+        String customPackage = annotation != null ? annotation.packageName().trim() : "";
+        String customBusName = annotation != null ? annotation.busName().trim() : "";
+
         PackageElement packageElement = processingEnv.getElementUtils().getPackageOf(eventType);
-        String packageName = packageElement.getQualifiedName().toString();
+        String defaultPackage = packageElement.getQualifiedName().toString();
+        String packageName = customPackage.isEmpty() ? defaultPackage : customPackage;
         String eventName = eventType.getQualifiedName().toString();
-        String relativeName = packageName.isEmpty()
+        String relativeName = defaultPackage.isEmpty()
                 ? eventName
-                : eventName.substring(packageName.length() + 1);
-        String generatedSimpleName = relativeName.replace('.', '_') + "Bus";
+                : eventName.substring(defaultPackage.length() + 1);
+        String defaultSimpleName = relativeName.replace('.', '_') + "Bus";
+        String generatedSimpleName = customBusName.isEmpty() ? defaultSimpleName : customBusName;
         String generatedName = packageName.isEmpty()
                 ? generatedSimpleName
                 : packageName + '.' + generatedSimpleName;
+
+        String floraClass = Flora.class.getName();
+        String floraBusClass = FloraBus.class.getName();
 
         try {
             JavaFileObject source = filer.createSourceFile(generatedName, eventType);
@@ -89,12 +100,14 @@ public final class EventTypeProcessor extends AbstractProcessor {
                 writer.write("@" + Generated.class.getCanonicalName() + "(\""
                         + EventTypeProcessor.class.getCanonicalName() + "\")\n");
                 writer.write("public final class " + generatedSimpleName + " {\n");
-                writer.write("    public static final sweetie.evaware.flora.core.FloraBus<" + eventName
-                        + "> BUS = sweetie.evaware.flora.Flora.getBus(" + eventName + ".class);\n\n");
+                writer.write("    public static final " + floraBusClass + "<" + eventName
+                        + "> BUS = " + floraClass + ".getBus(" + eventName + ".class);\n\n");
                 writer.write("    private " + generatedSimpleName + "() {\n    }\n\n");
-                writer.write("    public static sweetie.evaware.flora.core.FloraBus<" + eventName
+                writer.write("    public static " + floraBusClass + "<" + eventName
                         + "> get() {\n        return BUS;\n    }\n\n");
                 writer.write("    public static void post(" + eventName + " event) {\n");
+                writer.write("        " + floraClass + ".post(event);\n    }\n\n");
+                writer.write("    public static void postDirect(" + eventName + " event) {\n");
                 writer.write("        BUS.post(event);\n    }\n");
                 writer.write("}\n");
             }

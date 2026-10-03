@@ -7,6 +7,7 @@ import java.lang.invoke.VarHandle;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 class EventWorker extends Thread {
     private static final long CLOSED_MASK = 1L;
@@ -67,6 +68,9 @@ class EventWorker extends Thread {
             consumerIndex = sequence(consumerSequence);
             producerIndex = producerIndex(state);
             if (producerIndex - consumerIndex >= events.length) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new RejectedExecutionException("Thread interrupted while waiting for worker queue");
+                }
                 spins = applyBackpressure(spins);
                 continue;
             }
@@ -159,9 +163,16 @@ class EventWorker extends Thread {
     @SuppressWarnings("unchecked")
     private <T> void invoke(Object callback, Object event) {
         T typedEvent = (T) event;
+        Predicate<Object> canceller = FloraConfigurator.getCanceller(event.getClass());
+        if (canceller != null && canceller.test(event)) {
+            return;
+        }
         Consumer<Throwable> handler = FloraConfigurator.getExceptionHandler();
         if (callback instanceof Consumer<?>[] listeners) {
             for (Consumer<?> listener : listeners) {
+                if (canceller != null && canceller.test(event)) {
+                    break;
+                }
                 invokeListener((Consumer<T>) listener, typedEvent, handler);
             }
             return;

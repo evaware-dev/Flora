@@ -19,10 +19,18 @@ public final class PolymorphicDispatcher {
         }
     };
 
-    private static final ClassValue<CompositeDispatch> COMPOSITE_CACHE = new ClassValue<>() {
+    private static final class CompositeHolder {
+        volatile CompositeDispatch dispatch;
+
+        CompositeHolder(CompositeDispatch dispatch) {
+            this.dispatch = dispatch;
+        }
+    }
+
+    private static final ClassValue<CompositeHolder> COMPOSITE_CACHE = new ClassValue<>() {
         @Override
-        protected CompositeDispatch computeValue(Class<?> type) {
-            return buildComposite(type, FloraConfigurator.getEpoch());
+        protected CompositeHolder computeValue(Class<?> type) {
+            return new CompositeHolder(buildComposite(type, FloraConfigurator.getEpoch()));
         }
     };
 
@@ -38,10 +46,11 @@ public final class PolymorphicDispatcher {
     public static <T> T dispatch(T event) {
         Objects.requireNonNull(event, "event");
         Class<?> eventClass = event.getClass();
-        CompositeDispatch cache = COMPOSITE_CACHE.get(eventClass);
+        CompositeHolder holder = COMPOSITE_CACHE.get(eventClass);
+        CompositeDispatch cache = holder.dispatch;
         long currentEpoch = FloraConfigurator.getEpoch();
         if (cache.epoch != currentEpoch) {
-            cache = updateComposite(eventClass, currentEpoch);
+            cache = updateComposite(holder, eventClass, currentEpoch);
         }
         cache.dispatch((T) event, FloraConfigurator.getExceptionHandler());
         return event;
@@ -54,13 +63,16 @@ public final class PolymorphicDispatcher {
         return (Consumer<T>[]) EMPTY;
     }
 
-    private static synchronized CompositeDispatch updateComposite(Class<?> eventClass, long currentEpoch) {
-        COMPOSITE_CACHE.remove(eventClass);
-        CompositeDispatch fresh = COMPOSITE_CACHE.get(eventClass);
-        if (fresh.epoch == currentEpoch) {
+    private static CompositeDispatch updateComposite(CompositeHolder holder, Class<?> eventClass, long currentEpoch) {
+        synchronized (holder) {
+            CompositeDispatch current = holder.dispatch;
+            if (current.epoch == currentEpoch) {
+                return current;
+            }
+            CompositeDispatch fresh = buildComposite(eventClass, currentEpoch);
+            holder.dispatch = fresh;
             return fresh;
         }
-        return buildComposite(eventClass, currentEpoch);
     }
 
     @SuppressWarnings("unchecked")
@@ -182,7 +194,7 @@ public final class PolymorphicDispatcher {
                 }
             }
 
-            if (onlySynchronous) {
+            if (onlySynchronous || (canceller != null && canceller.test(event))) {
                 return;
             }
 

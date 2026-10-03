@@ -52,6 +52,8 @@ class EventTypeProcessorTest {
         assertTrue(code.contains("Flora.getBus(example.LoginEvent.class)"));
         assertTrue(code.contains("public static final sweetie.evaware.flora.core.FloraBus<example.LoginEvent> BUS"));
         assertTrue(code.contains("public static void post(example.LoginEvent event)"));
+        assertTrue(code.contains("Flora.post(event)"));
+        assertTrue(code.contains("public static void postDirect(example.LoginEvent event)"));
         assertTrue(Files.isRegularFile(classes.resolve("example/LoginEventBus.class")));
     }
 
@@ -83,5 +85,42 @@ class EventTypeProcessorTest {
                     files.getJavaFileObjects(eventSource)).call();
             assertFalse(compiled);
         }
+    }
+
+    @Test
+    void generatesCustomPackageAndBusName() throws Exception {
+        Path sources = Files.createDirectories(temporaryDirectory.resolve("custom-sources/example"));
+        Path generated = Files.createDirectories(temporaryDirectory.resolve("custom-generated"));
+        Path classes = Files.createDirectories(temporaryDirectory.resolve("custom-classes"));
+        Path eventSource = sources.resolve("CustomEvent.java");
+        Files.writeString(eventSource, """
+                package example;
+
+                import sweetie.evaware.flora.api.EventType;
+
+                @EventType(packageName = "custom.pkg", busName = "RenamedBus")
+                public final class CustomEvent {
+                }
+                """);
+
+        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        try (StandardJavaFileManager files = compiler.getStandardFileManager(null, null, null)) {
+            List<String> options = List.of(
+                    "-classpath", System.getProperty("java.class.path"),
+                    "-processor", EventTypeProcessor.class.getName(),
+                    "-s", generated.toString(),
+                    "-d", classes.toString()
+            );
+            boolean compiled = compiler.getTask(null, files, null, options, null,
+                    files.getJavaFileObjects(eventSource)).call();
+            assertTrue(compiled);
+        }
+
+        Path generatedSource = generated.resolve("custom/pkg/RenamedBus.java");
+        assertTrue(Files.isRegularFile(generatedSource));
+        String code = Files.readString(generatedSource);
+        assertTrue(code.contains("package custom.pkg;"));
+        assertTrue(code.contains("public final class RenamedBus"));
+        assertTrue(Files.isRegularFile(classes.resolve("custom/pkg/RenamedBus.class")));
     }
 }

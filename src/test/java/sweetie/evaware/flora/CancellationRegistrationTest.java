@@ -2,6 +2,10 @@ package sweetie.evaware.flora;
 
 import org.junit.jupiter.api.Test;
 import sweetie.evaware.flora.api.Commando;
+import sweetie.evaware.flora.api.DispatchMode;
+
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -114,6 +118,28 @@ class CancellationRegistrationTest {
         } finally {
             Flora.unregister(target);
             sub.unsubscribe();
+        }
+    }
+
+    @Test
+    void asyncListenersDoNotReceiveSynchronouslyCancelledEvent() {
+        FloraConfigurator.registerCancellation(MyCancellable.class, MyCancellable::isCancelled);
+
+        List<String> asyncLog = new CopyOnWriteArrayList<>();
+        var syncSub = Flora.subscribe(CustomCancellable.class, 100, DispatchMode.SYNC, CustomCancellable::cancel);
+        var asyncSub = Flora.subscribe(CustomCancellable.class, 50, DispatchMode.ASYNC, e -> asyncLog.add("async"));
+        var parallelSub = Flora.subscribe(CustomCancellable.class, 10, DispatchMode.ASYNC_PARALLEL, e -> asyncLog.add("parallel"));
+
+        try {
+            CustomCancellable event = new CustomCancellable("test");
+            Flora.post(event);
+            assertTrue(event.isCancelled());
+            assertTrue(Flora.awaitQuiescence(500, TimeUnit.MILLISECONDS));
+            assertTrue(asyncLog.isEmpty());
+        } finally {
+            syncSub.unsubscribe();
+            asyncSub.unsubscribe();
+            parallelSub.unsubscribe();
         }
     }
 }
