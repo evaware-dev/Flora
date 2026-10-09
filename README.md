@@ -71,7 +71,3 @@ dependencies {
 
 - **[docs/SYNTAX.md](docs/SYNTAX.md)**: complete syntax reference separated for **Java** and **Kotlin**.
 - **[example/](example/src/main/java/example/Main.java)**: runnable end-to-end sample application (`./gradlew :example:run`).
-
-## License
-
-GNU Lesser General Public License v3.0 only. See [LICENSE](LICENSE).
