@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import sweetie.evaware.flora.api.Config;
 
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -14,8 +16,76 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class EventWorkerTest {
+    @Test
+    void nestedSubmissionRejectsFullQueueWithoutDeadlocking() throws Exception {
+        EventWorker worker = new EventWorker("Flora-Nested-Test", 2, 8, 4, 1_000L, new Config());
+        CountDownLatch finished = new CountDownLatch(1);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        AtomicInteger calls = new AtomicInteger();
+        try {
+            worker.submit(0, ignored -> {
+                try {
+                    worker.submit(1, value -> calls.incrementAndGet());
+                    assertThrows(RejectedExecutionException.class,
+                            () -> worker.submit(2, value -> calls.incrementAndGet()));
+                } catch (Throwable t) {
+                    failure.set(t);
+                } finally {
+                    finished.countDown();
+                }
+            });
+            assertTrue(finished.await(2, TimeUnit.SECONDS), "nested producer deadlocked");
+        } finally {
+            worker.requestShutdown();
+            worker.join(2_000L);
+        }
+        assertNull(failure.get());
+        assertEquals(1, calls.get());
+        assertFalse(worker.isAlive());
+    }
+
+    @Test
+    void cancellationFailureIsReportedAndLaterEventsStillRun() throws Exception {
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        IllegalStateException expected = new IllegalStateException("predicate failure");
+        Config config = new Config().exceptionHandler(failure::set);
+        config.registerCancellation(Integer.class, n -> {
+            if (n == 0) throw expected;
+            return false;
+        });
+        EventWorker worker = new EventWorker("Flora-Predicate-Test", 4, 8, 4, 1_000L, config);
+        CountDownLatch delivered = new CountDownLatch(1);
+        try {
+            worker.submit(0, ignored -> { });
+            worker.submit(1, ignored -> delivered.countDown());
+            assertTrue(delivered.await(2, TimeUnit.SECONDS), "worker stopped after predicate failure");
+            assertSame(expected, failure.get());
+        } finally {
+            worker.requestShutdown();
+            worker.join(2_000L);
+        }
+    }
+
+    @Test
+    void fatalWorkerFailureRejectsSubsequentSubmissions() throws Exception {
+        EventWorker worker = new EventWorker("Flora-Fatal-Test", 4, 8, 4, 1_000L, new Config());
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        worker.setUncaughtExceptionHandler((thread, error) -> failure.set(error));
+        InternalError fatal = new InternalError("fatal test failure");
+        try {
+            worker.submit(0, ignored -> { throw fatal; });
+            worker.join(2_000L);
+            assertFalse(worker.isAlive());
+            assertSame(fatal, failure.get());
+            assertThrows(RejectedExecutionException.class, () -> worker.submit(1, ignored -> { }));
+        } finally {
+            worker.requestShutdown();
+        }
+    }
+
     @RepeatedTest(3)
     void sustainedProducerCannotMissWorkerWakeup() throws Exception {
         int submissions = 250_000;

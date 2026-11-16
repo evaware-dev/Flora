@@ -59,5 +59,9 @@ dependencies {
 
 ## Documentation & Examples
 
+Async delivery uses bounded queues. External producers wait for space. Posting from an async callback to a full queue throws `RejectedExecutionException` instead of blocking a worker. With `ASYNC_PARALLEL`, some callbacks may already be queued when a later callback is rejected.
+
+Nonfatal async callback and cancellation-predicate failures are reported to the system's exception handler; a failed cancellation check skips that queued task, and the worker continues. A `VirtualMachineError` terminates the affected worker and closes its queue to new submissions. A bus's local exception handler applies to synchronous listeners, including polymorphic delivery; async listeners use the system's handler.
+
 - **[docs/SYNTAX.md](docs/SYNTAX.md)**: complete syntax reference separated for **Java** and **Kotlin**.
 - **[example/](example/src/main/java/example/Main.java)**: runnable end-to-end sample application (`./gradlew :example:run`).

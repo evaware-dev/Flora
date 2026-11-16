@@ -8,6 +8,30 @@ public final class SyncDispatcher {
     }
 
     public static <T> void dispatch(
+            T event, Consumer<T>[] listeners, int len, Predicate<Object> canceller,
+            Consumer<Throwable> fallback, Consumer<Throwable>[] handlers
+    ) {
+        if (handlers == null) {
+            dispatch(event, listeners, len, canceller, fallback);
+            return;
+        }
+        for (int i = 0; i < len; i++) {
+            if (canceller != null && canceller.test(event)) break;
+            Consumer<Throwable> handler = handlers[i] != null ? handlers[i] : fallback;
+            if (handler == null) {
+                listeners[i].accept(event);
+            } else {
+                try {
+                    listeners[i].accept(event);
+                } catch (Throwable t) {
+                    if (t instanceof VirtualMachineError vme) throw vme;
+                    handler.accept(t);
+                }
+            }
+        }
+    }
+
+    public static <T> void dispatch(
             T event,
             Consumer<T>[] listeners,
             int len,

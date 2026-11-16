@@ -71,6 +71,10 @@ class EventWorker extends Thread {
             consumerIndex = sequence(consumerSequence);
             producerIndex = producerIndex(state);
             if (producerIndex - consumerIndex >= events.length) {
+                // A worker cannot wait for queue space that requires its own callback to finish.
+                if (Thread.currentThread() instanceof EventWorker) {
+                    throw new RejectedExecutionException("Worker cannot wait for a full event queue");
+                }
                 if (Thread.currentThread().isInterrupted()) {
                     throw new RejectedExecutionException("Thread interrupted while waiting for worker queue");
                 }
@@ -102,18 +106,22 @@ class EventWorker extends Thread {
     @Override
     public final void run() {
         int idleSpins = 0;
-        while (shouldRun()) {
-            long consumerIndex = sequence(consumerSequence);
-            if (consumerIndex < producerIndex(sequence(producerState))) {
-                idleSpins = 0;
-                consume(consumerIndex);
-            } else if (idleSpins < idleSpinLimit) {
-                idleSpins++;
-                Thread.onSpinWait();
-            } else {
-                idleSpins = 0;
-                awaitWork();
+        try {
+            while (shouldRun()) {
+                long consumerIndex = sequence(consumerSequence);
+                if (consumerIndex < producerIndex(sequence(producerState))) {
+                    idleSpins = 0;
+                    consume(consumerIndex);
+                } else if (idleSpins < idleSpinLimit) {
+                    idleSpins++;
+                    Thread.onSpinWait();
+                } else {
+                    idleSpins = 0;
+                    awaitWork();
+                }
             }
+        } finally {
+            requestShutdown();
         }
     }
 
@@ -156,6 +164,8 @@ class EventWorker extends Thread {
 
         try {
             invoke(callback, ARRAY_ELEMENT.get(events, index));
+        } catch (Throwable failure) {
+            reportFailure(failure, config.exceptionHandler());
         } finally {
             ARRAY_ELEMENT.set(events, index, null);
             ARRAY_ELEMENT.setRelease(callbacks, index, null);
@@ -187,14 +197,19 @@ class EventWorker extends Thread {
         try {
             listener.accept(event);
         } catch (Throwable t) {
-            if (t instanceof VirtualMachineError vme) throw vme;
-            if (handler != null) {
-                try {
-                    handler.accept(t);
-                } catch (Throwable ht) {
-                    t.addSuppressed(ht);
-                    t.printStackTrace();
-                }
+            reportFailure(t, handler);
+        }
+    }
+
+    private static void reportFailure(Throwable failure, Consumer<Throwable> handler) {
+        if (failure instanceof VirtualMachineError vme) throw vme;
+        if (handler != null) {
+            try {
+                handler.accept(failure);
+            } catch (Throwable handlerFailure) {
+                if (handlerFailure instanceof VirtualMachineError vme) throw vme;
+                if (handlerFailure != failure) failure.addSuppressed(handlerFailure);
+                failure.printStackTrace();
             }
         }
     }

@@ -440,6 +440,7 @@ public class EventBus<T> {
 
     public void setExceptionHandler(Consumer<Throwable> exceptionHandler) {
         this.exceptionHandler = exceptionHandler;
+        notifyChange();
     }
 
     public Consumer<Throwable> getExceptionHandler() {

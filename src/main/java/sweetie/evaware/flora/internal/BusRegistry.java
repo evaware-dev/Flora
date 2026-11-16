@@ -94,26 +94,36 @@ public final class BusRegistry {
         }
 
         if (total == 0) {
-            return new CompositeDispatch(epoch, null, null, emptyArray(), emptyArray(), emptyArray(), -1);
+            return new CompositeDispatch(epoch, null, null, emptyArray(), emptyArray(), emptyArray(), -1, null);
         }
 
         if (activeBuses.size() == 1 && activeBuses.get(0) == createdBuses.get(eventClass)) {
             EventBus<Object> directBus = (EventBus<Object>) activeBuses.get(0);
-            return new CompositeDispatch(epoch, directBus, null, emptyArray(), emptyArray(), emptyArray(), -1);
+            return new CompositeDispatch(epoch, directBus, null, emptyArray(), emptyArray(), emptyArray(), -1, null);
         }
 
-        List<Listener<Object>> merged = new ArrayList<>(total);
+        List<ResolvedListener> merged = new ArrayList<>(total);
+        List<Listener<Object>> definitions = new ArrayList<>();
         for (EventBus<?> bus : activeBuses) {
-            bus.copyListenersTo(merged);
+            definitions.clear();
+            bus.copyListenersTo(definitions);
+            for (Listener<Object> listener : definitions) {
+                merged.add(new ResolvedListener(listener, bus.getExceptionHandler()));
+            }
         }
-        merged.sort(Listener::compareTo);
+        merged.sort((a, b) -> a.listener.compareTo(b.listener));
 
         int syncCount = 0;
         int asyncCount = 0;
         int parallelCount = 0;
-        for (Listener<Object> l : merged) {
+        boolean hasLocalSyncHandler = false;
+        for (ResolvedListener resolved : merged) {
+            Listener<Object> l = resolved.listener;
             switch (l.mode()) {
-                case SYNC -> syncCount++;
+                case SYNC -> {
+                    syncCount++;
+                    hasLocalSyncHandler |= resolved.handler != null;
+                }
                 case ASYNC -> asyncCount++;
                 case ASYNC_PARALLEL -> parallelCount++;
             }
@@ -122,18 +132,26 @@ public final class BusRegistry {
         Consumer<Object>[] sync = syncCount == 0 ? emptyArray() : (Consumer<Object>[]) new Consumer<?>[syncCount];
         Consumer<Object>[] async = asyncCount == 0 ? emptyArray() : (Consumer<Object>[]) new Consumer<?>[asyncCount];
         Consumer<Object>[] parallel = parallelCount == 0 ? emptyArray() : (Consumer<Object>[]) new Consumer<?>[parallelCount];
+        Consumer<Throwable>[] handlers = hasLocalSyncHandler ? (Consumer<Throwable>[]) new Consumer<?>[syncCount] : null;
 
         int s = 0, a = 0, p = 0;
-        for (Listener<Object> l : merged) {
+        for (ResolvedListener resolved : merged) {
+            Listener<Object> l = resolved.listener;
             switch (l.mode()) {
-                case SYNC -> sync[s++] = l.callback();
+                case SYNC -> {
+                    if (handlers != null) handlers[s] = resolved.handler;
+                    sync[s++] = l.callback();
+                }
                 case ASYNC -> async[a++] = l.callback();
                 case ASYNC_PARALLEL -> parallel[p++] = l.callback();
             }
         }
 
         int lane = asyncCount > 0 ? ensureCompositeAsyncLane() : -1;
-        return new CompositeDispatch(epoch, null, config.canceller(eventClass), sync, async, parallel, lane);
+        return new CompositeDispatch(epoch, null, config.canceller(eventClass), sync, async, parallel, lane, handlers);
+    }
+
+    private record ResolvedListener(Listener<Object> listener, Consumer<Throwable> handler) {
     }
 
     private int ensureCompositeAsyncLane() {
@@ -166,10 +184,11 @@ public final class BusRegistry {
         final Consumer<Object>[] parallel;
         final int asyncLane;
         final boolean onlySynchronous;
+        final Consumer<Throwable>[] handlers;
 
         CompositeDispatch(long epoch, EventBus<Object> directBus, Predicate<Object> canceller,
                           Consumer<Object>[] sync, Consumer<Object>[] async, Consumer<Object>[] parallel,
-                          int asyncLane) {
+                          int asyncLane, Consumer<Throwable>[] handlers) {
             this.epoch = epoch;
             this.directBus = directBus;
             this.canceller = canceller;
@@ -177,6 +196,7 @@ public final class BusRegistry {
             this.asynchronous = async;
             this.parallel = parallel;
             this.asyncLane = asyncLane;
+            this.handlers = handlers;
             this.onlySynchronous = async.length == 0 && parallel.length == 0;
         }
 
@@ -195,7 +215,7 @@ public final class BusRegistry {
 
             final Predicate<Object> canceller = this.canceller;
             if (len > 0) {
-                SyncDispatcher.dispatch(event, sync, len, canceller, config.exceptionHandler());
+                SyncDispatcher.dispatch(event, sync, len, canceller, config.exceptionHandler(), handlers);
             }
 
             if (onlySynchronous || (canceller != null && canceller.test(event))) {
