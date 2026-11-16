@@ -17,6 +17,7 @@ public final class FloraConfigurator {
     private static final AtomicLong EPOCH = new AtomicLong(1);
     private static final Map<Class<?>, Predicate<Object>> CANCELLERS = new ConcurrentHashMap<>();
     private static final Set<Class<? extends Annotation>> ANNOTATIONS = ConcurrentHashMap.newKeySet();
+    private static volatile boolean hasCancellers;
     private static volatile Consumer<Throwable> exceptionHandler = Throwable::printStackTrace;
     private static volatile ClassValue<Predicate<Object>> cancellerCache = createCancellerCache();
 
@@ -33,11 +34,12 @@ public final class FloraConfigurator {
         Objects.requireNonNull(predicate, "predicate");
         CANCELLERS.put(type, (Predicate<Object>) predicate);
         cancellerCache = createCancellerCache();
+        hasCancellers = true;
         EPOCH.incrementAndGet();
     }
 
     public static Predicate<Object> getCanceller(Class<?> type) {
-        return cancellerCache.get(type);
+        return hasCancellers ? cancellerCache.get(type) : null;
     }
 
     public static void registerAnnotation(Class<? extends Annotation> annotationType) {

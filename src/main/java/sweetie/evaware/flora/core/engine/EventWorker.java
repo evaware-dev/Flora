@@ -215,6 +215,10 @@ class EventWorker extends Thread {
     }
 
     private static final class Sequence {
+        @SuppressWarnings("unused")
+        private long p0, p1, p2, p3, p4, p5, p6;
         private volatile long value;
+        @SuppressWarnings("unused")
+        private long q0, q1, q2, q3, q4, q5, q6;
     }
 }

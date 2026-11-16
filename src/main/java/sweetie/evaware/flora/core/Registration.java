@@ -5,11 +5,17 @@ import sweetie.evaware.flora.api.Subscription;
 final class Registration<T> implements Subscription {
     final FloraBus<T> bus;
     final Listener<T> listener;
-    private boolean active = true;
+    boolean active = true;
 
     Registration(FloraBus<T> bus, Listener<T> listener) {
         this.bus = bus;
         this.listener = listener;
+    }
+
+    boolean markInactive() {
+        if (!active) return false;
+        active = false;
+        return true;
     }
 
     @Override
