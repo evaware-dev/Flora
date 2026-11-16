@@ -16,7 +16,7 @@ class CustomDispatchEngineTest {
     void busCanUseAnIsolatedConfiguredEngine() {
         DispatchConfig config = new DispatchConfig(1, 2, 16, 16, 8, 4, 1_000L);
         DispatchEngine engine = new DispatchEngine(config);
-        FloraBus<Object> bus = new FloraBus<>(engine);
+        EventBus<Object> bus = new EventBus<>(engine);
         AtomicInteger calls = new AtomicInteger();
         bus.subscribe(new Listener<>(0, ignored -> calls.incrementAndGet(), DispatchMode.ASYNC));
 

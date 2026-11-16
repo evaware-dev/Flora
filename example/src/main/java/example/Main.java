@@ -1,7 +1,6 @@
 package example;
 
 import sweetie.evaware.flora.Flora;
-import sweetie.evaware.flora.FloraConfigurator;
 import sweetie.evaware.flora.api.Commando;
 import sweetie.evaware.flora.api.DispatchMode;
 import sweetie.evaware.flora.api.Subscription;
@@ -87,8 +86,9 @@ public class Main {
     public static void main(String[] args) {
         LogType.SYSTEM.log("Initializing Systems");
 
-        FloraConfigurator.setErrorHandler(Throwable::printStackTrace);
-        FloraConfigurator.registerCancellation(PlayerAttackEvent.class, e -> e.cancelled);
+        Flora.config()
+                .exceptionHandler(Throwable::printStackTrace)
+                .registerCancellation(PlayerAttackEvent.class, e -> e.cancelled);
 
         AnalyticsService analytics = new AnalyticsService();
         ChatModerator moderator = new ChatModerator();

@@ -1,71 +1,70 @@
 package sweetie.evaware.flora;
 
+import sweetie.evaware.flora.api.Config;
 import sweetie.evaware.flora.api.DispatchMode;
 import sweetie.evaware.flora.api.Subscription;
-import sweetie.evaware.flora.core.FloraBus;
-import sweetie.evaware.flora.core.Listener;
-import sweetie.evaware.flora.core.engine.DispatchEngine;
-import sweetie.evaware.flora.internal.AnnotationRegistry;
-import sweetie.evaware.flora.internal.PolymorphicDispatcher;
+import sweetie.evaware.flora.core.EventBus;
 
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 public final class Flora {
-    private static final AnnotationRegistry ANNOTATIONS = new AnnotationRegistry();
-
     private Flora() {
     }
 
-    public static <T> FloraBus<T> getBus(Class<T> type) {
-        return PolymorphicDispatcher.getBus(type);
+    public static EventSystem system() {
+        return EventSystem.global();
+    }
+
+    public static Config config() {
+        return EventSystem.global().config();
+    }
+
+    public static <T> EventBus<T> bus(Class<T> type) {
+        return EventSystem.global().bus(type);
     }
 
     public static <T> T post(T event) {
-        return PolymorphicDispatcher.dispatch(event);
+        return EventSystem.global().post(event);
     }
 
     public static <T> Subscription subscribe(Class<T> eventType, Consumer<? super T> listener) {
-        return subscribe(eventType, 0, DispatchMode.SYNC, listener);
+        return EventSystem.global().subscribe(eventType, listener);
     }
 
     public static <T> Subscription subscribe(Class<T> eventType, DispatchMode mode, Consumer<? super T> listener) {
-        return subscribe(eventType, 0, mode, listener);
+        return EventSystem.global().subscribe(eventType, mode, listener);
     }
 
     public static <T> Subscription subscribe(Class<T> eventType, int priority, Consumer<? super T> listener) {
-        return subscribe(eventType, priority, DispatchMode.SYNC, listener);
+        return EventSystem.global().subscribe(eventType, priority, listener);
     }
 
-    @SuppressWarnings("unchecked")
     public static <T> Subscription subscribe(Class<T> eventType, int priority, DispatchMode mode, Consumer<? super T> listener) {
-        Objects.requireNonNull(listener, "listener");
-        FloraBus<T> bus = getBus(eventType);
-        return bus.subscribe(new Listener<>(priority, (Consumer<T>) listener, mode));
+        return EventSystem.global().subscribe(eventType, priority, mode, listener);
     }
 
     public static void register(Object target) {
-        ANNOTATIONS.register(target);
+        EventSystem.global().register(target);
     }
 
     public static void register(Class<?> targetClass) {
-        ANNOTATIONS.registerStatic(targetClass);
+        EventSystem.global().register(targetClass);
     }
 
     public static void unregister(Object target) {
-        ANNOTATIONS.unregister(target);
+        EventSystem.global().unregister(target);
     }
 
     public static void unregister(Class<?> targetClass) {
-        ANNOTATIONS.unregisterStatic(targetClass);
+        EventSystem.global().unregister(targetClass);
     }
 
     public static void shutdown() {
-        DispatchEngine.defaultEngine().shutdown();
+        EventSystem.global().shutdown();
     }
 
     public static boolean awaitQuiescence(long timeout, TimeUnit unit) {
-        return DispatchEngine.defaultEngine().awaitQuiescence(timeout, unit);
+        return EventSystem.global().awaitQuiescence(timeout, unit);
     }
 }

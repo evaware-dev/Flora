@@ -1,9 +1,10 @@
 package sweetie.evaware.flora.core.engine;
 
-import sweetie.evaware.flora.FloraConfigurator;
+import sweetie.evaware.flora.api.Config;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.Objects;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
@@ -31,10 +32,11 @@ class EventWorker extends Thread {
     private final int idleSpinLimit;
     private final int backpressureSpinLimit;
     private final long backpressureParkNanos;
+    private final Config config;
     private volatile boolean parked;
 
     EventWorker(String name, int capacity, int idleSpinLimit, int backpressureSpinLimit,
-                long backpressureParkNanos) {
+                long backpressureParkNanos, Config config) {
         super(name);
         if (capacity < 2 || Integer.bitCount(capacity) != 1) {
             throw new IllegalArgumentException("capacity must be a power of two and at least 2");
@@ -45,6 +47,7 @@ class EventWorker extends Thread {
         this.idleSpinLimit = idleSpinLimit;
         this.backpressureSpinLimit = backpressureSpinLimit;
         this.backpressureParkNanos = backpressureParkNanos;
+        this.config = Objects.requireNonNull(config, "config");
         setDaemon(true);
         start();
     }
@@ -163,11 +166,11 @@ class EventWorker extends Thread {
     @SuppressWarnings("unchecked")
     private <T> void invoke(Object callback, Object event) {
         T typedEvent = (T) event;
-        Predicate<Object> canceller = FloraConfigurator.getCanceller(event.getClass());
+        Predicate<Object> canceller = config.canceller(event.getClass());
         if (canceller != null && canceller.test(event)) {
             return;
         }
-        Consumer<Throwable> handler = FloraConfigurator.getExceptionHandler();
+        Consumer<Throwable> handler = config.exceptionHandler();
         if (callback instanceof Consumer<?>[] listeners) {
             for (Consumer<?> listener : listeners) {
                 if (canceller != null && canceller.test(event)) {

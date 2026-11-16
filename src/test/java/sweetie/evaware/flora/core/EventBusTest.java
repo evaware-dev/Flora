@@ -4,7 +4,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import sweetie.evaware.flora.Flora;
-import sweetie.evaware.flora.FloraConfigurator;
 import sweetie.evaware.flora.api.DispatchMode;
 import sweetie.evaware.flora.api.Subscription;
 
@@ -18,15 +17,15 @@ import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class FloraBusTest {
+class EventBusTest {
     @AfterEach
     void restoreErrorHandler() {
-        FloraConfigurator.setErrorHandler(Throwable::printStackTrace);
+        Flora.config().exceptionHandler(Throwable::printStackTrace);
     }
 
     @Test
     void dispatchesByPriorityAndPreservesOrderForEqualPriority() {
-        FloraBus<Object> bus = new FloraBus<>();
+        EventBus<Object> bus = new EventBus<>();
         List<Integer> calls = new ArrayList<>();
 
         bus.subscribe(new Listener<>(1, ignored -> calls.add(1), DispatchMode.SYNC));
@@ -41,7 +40,7 @@ class FloraBusTest {
 
     @Test
     void subscriptionHandleIsIdentityBasedAndIdempotent() {
-        FloraBus<Object> bus = new FloraBus<>();
+        EventBus<Object> bus = new EventBus<>();
         AtomicInteger calls = new AtomicInteger();
         Consumer<Object> callback = ignored -> calls.incrementAndGet();
         Listener<Object> listener = new Listener<>(callback);
@@ -61,7 +60,7 @@ class FloraBusTest {
 
     @Test
     void batchSubscriptionPublishesAndRemovesOneSnapshot() {
-        FloraBus<Object> bus = new FloraBus<>();
+        EventBus<Object> bus = new EventBus<>();
         List<Integer> calls = new ArrayList<>();
         Subscription subscription = bus.subscribeAll(List.of(
                 new Listener<>(1, ignored -> calls.add(1), DispatchMode.SYNC),
@@ -79,10 +78,10 @@ class FloraBusTest {
 
     @Test
     void listenerFailureDoesNotStopRemainingDispatch() {
-        FloraBus<Object> bus = new FloraBus<>();
+        EventBus<Object> bus = new EventBus<>();
         List<Throwable> failures = new ArrayList<>();
         AtomicInteger calls = new AtomicInteger();
-        FloraConfigurator.setErrorHandler(failures::add);
+        Flora.config().exceptionHandler(failures::add);
 
         bus.subscribe(new Listener<>(ignored -> {
             throw new IllegalStateException("boom");
@@ -100,7 +99,7 @@ class FloraBusTest {
     void asyncQueueDeliversConcurrentProducersWithoutLossAndInProducerOrder() throws Exception {
         int producers = 4;
         int eventsPerProducer = 10_000;
-        FloraBus<SequencedEvent> bus = new FloraBus<>();
+        EventBus<SequencedEvent> bus = new EventBus<>();
         AtomicInteger delivered = new AtomicInteger();
         AtomicIntegerArray lastSequence = new AtomicIntegerArray(producers);
         AtomicInteger orderingFailures = new AtomicInteger();
@@ -142,7 +141,7 @@ class FloraBusTest {
 
     @Test
     void parallelListenersCanRunConcurrently() {
-        FloraBus<Object> bus = new FloraBus<>();
+        EventBus<Object> bus = new EventBus<>();
         CountDownLatch entered = new CountDownLatch(2);
         AtomicInteger completed = new AtomicInteger();
         Consumer<Object> listener = ignored -> {
@@ -157,6 +156,49 @@ class FloraBusTest {
 
         assertTrue(Flora.awaitQuiescence(5, TimeUnit.SECONDS));
         assertEquals(2, completed.get());
+    }
+
+    @Test
+    void mergesBatchesAndRemovesViaBinarySearchAboveThreshold() {
+        EventBus<Object> bus = new EventBus<>();
+        List<String> calls = java.util.Collections.synchronizedList(new ArrayList<>());
+        List<Subscription> individual = new ArrayList<>();
+
+        for (int i = 0; i < 20; i++) {
+            int priority = i % 5;
+            String label = "i" + i;
+            individual.add(bus.subscribe(new Listener<>(priority, ignored -> calls.add(label), DispatchMode.SYNC)));
+        }
+
+        Subscription batch = bus.subscribeAll(List.of(
+                new Listener<>(4, ignored -> calls.add("b4"), DispatchMode.SYNC),
+                new Listener<>(10, ignored -> calls.add("b10"), DispatchMode.SYNC),
+                new Listener<>(2, ignored -> calls.add("b2"), DispatchMode.ASYNC)
+        ));
+
+        bus.post(new Object());
+        assertTrue(Flora.awaitQuiescence(5, TimeUnit.SECONDS));
+
+        assertEquals("b10", calls.get(0));
+        assertTrue(calls.contains("b4"));
+        assertTrue(calls.contains("b2"));
+        assertEquals(23, bus.listenerCount());
+
+        individual.get(4).unsubscribe(); // priority 4, >16 elements -> binary search path
+        individual.get(0).unsubscribe(); // priority 0
+        assertEquals(21, bus.listenerCount());
+
+        batch.unsubscribe();
+        batch.unsubscribe();
+        assertEquals(18, bus.listenerCount());
+
+        calls.clear();
+        bus.post(new Object());
+        assertEquals(18, calls.size());
+        assertFalse(calls.contains("b10"));
+        assertFalse(calls.contains("b4"));
+        assertFalse(calls.contains("i4"));
+        assertFalse(calls.contains("i0"));
     }
 
     private static void await(CountDownLatch latch) {

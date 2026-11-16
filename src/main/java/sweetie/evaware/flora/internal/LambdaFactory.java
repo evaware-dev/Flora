@@ -34,11 +34,15 @@ public final class LambdaFactory {
     private LambdaFactory() {
     }
 
+    public static MethodHandle getFactory(Method method) {
+        return FACTORIES.get(method.getDeclaringClass())
+                .computeIfAbsent(method, LambdaFactory::buildFactory);
+    }
+
     @SuppressWarnings("unchecked")
     public static <T> Consumer<T> createConsumer(Object instance, Method method) {
         try {
-            MethodHandle factory = FACTORIES.get(method.getDeclaringClass())
-                    .computeIfAbsent(method, LambdaFactory::buildFactory);
+            MethodHandle factory = getFactory(method);
             return (Consumer<T>) factory.invokeExact(instance);
         } catch (Throwable failure) {
             if (failure instanceof RuntimeException re) throw re;

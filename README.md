@@ -8,9 +8,9 @@ Ultra-high-performance, allocation-free event system for Java 17+ and Kotlin wit
 - **Polymorphic dispatch**: Hierarchical listener resolution with `ClassValue` caching and lock-free per-event invalidation.
 - **Asynchronous ring-buffer workers**: Dedicated ordered `ASYNC` lanes and distributed `ASYNC_PARALLEL` worker pools with progressive backpressure and disruptor-style sequence management.
 - **Deterministic priorities**: Explicit execution ordering with synchronous short-circuit cancellation.
-- **Dynamic cancellation**: Flexible predicate registration via `FloraConfigurator` without mandatory marker interfaces.
+- **Dynamic cancellation**: Flexible predicate registration via `Config` (`Flora.config()`) without mandatory marker interfaces.
+- **Isolated or global instances**: Use the global `Flora` facade or spin up isolated `EventSystem` instances with independent configuration and worker pools.
 - **Annotations & Lambdas**: Method handlers (`@Commando`) converted to direct JVM call sites via `LambdaMetafactory`, alongside type-safe lambda subscriptions.
-- **Compile-time bus generation**: Optional `@EventType` annotation processor generating direct bus accessors with configurable package and bus naming.
 - **Pure Java 17+**: Zero external runtime dependencies.
 
 ## Installation
@@ -36,12 +36,6 @@ ext {
 
 dependencies {
     implementation "sweetie.evaware:flora:$flora_version"
-
-    // Optional, for @EventType compile-time generation (Java):
-    annotationProcessor "sweetie.evaware:flora:$flora_version"
-
-    // For Kotlin projects using kapt:
-    // kapt "sweetie.evaware:flora:$flora_version"
 }
 ```
 
@@ -60,10 +54,6 @@ ext {
 
 dependencies {
     implementation "com.github.evaware-dev:Flora:$flora_version"
-
-    // Optional, for @EventType compile-time generation:
-    annotationProcessor "com.github.evaware-dev:Flora:$flora_version"
-    // kapt "com.github.evaware-dev:Flora:$flora_version"
 }
 ```
 

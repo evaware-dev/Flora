@@ -11,9 +11,9 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
-import sweetie.evaware.flora.FloraConfigurator;
+import sweetie.evaware.flora.Flora;
 import sweetie.evaware.flora.api.DispatchMode;
-import sweetie.evaware.flora.core.FloraBus;
+import sweetie.evaware.flora.core.EventBus;
 import sweetie.evaware.flora.core.Listener;
 
 import java.util.concurrent.TimeUnit;
@@ -28,22 +28,22 @@ public class FloraCancellationJmhBenchmark {
     @Param({"8", "64", "200"})
     public int listeners;
 
-    private FloraBus<CancellableEvent> floraBus;
+    private EventBus<CancellableEvent> eventBus;
     private CancellableEvent event;
 
     @Setup
     public void setup() {
-        FloraConfigurator.registerCancellation(CancellableEvent.class, CancellableEvent::isCancelled);
+        Flora.config().registerCancellation(CancellableEvent.class, CancellableEvent::isCancelled);
 
         event = new CancellableEvent();
 
-        floraBus = new FloraBus<>();
-        floraBus.subscribe(new Listener<>(100, item -> {
+        eventBus = new EventBus<>();
+        eventBus.subscribe(new Listener<>(100, item -> {
             item.value++;
             item.setCancelled(true);
         }, DispatchMode.SYNC));
         for (int i = 0; i < listeners - 1; i++) {
-            floraBus.subscribe(new Listener<>(0, item -> item.value++, DispatchMode.SYNC));
+            eventBus.subscribe(new Listener<>(0, item -> item.value++, DispatchMode.SYNC));
         }
     }
 
@@ -51,7 +51,7 @@ public class FloraCancellationJmhBenchmark {
     public int cancelledPost() {
         event.value = 0;
         event.setCancelled(false);
-        floraBus.post(event);
+        eventBus.post(event);
         return event.value;
     }
 

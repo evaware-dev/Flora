@@ -1,5 +1,8 @@
 package sweetie.evaware.flora.core.engine;
 
+import sweetie.evaware.flora.api.Config;
+
+import java.util.Objects;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
@@ -11,17 +14,19 @@ final class WorkerPool {
     private final int idleSpinLimit;
     private final int backpressureSpinLimit;
     private final long backpressureParkNanos;
+    private final Config config;
     private final AtomicReferenceArray<EventWorker> workers;
     private final AtomicInteger nextLane = new AtomicInteger();
     private volatile boolean accepting = true;
 
     WorkerPool(String threadNamePrefix, int laneCount, int queueCapacity, int idleSpinLimit,
-               int backpressureSpinLimit, long backpressureParkNanos) {
+               int backpressureSpinLimit, long backpressureParkNanos, Config config) {
         this.threadNamePrefix = threadNamePrefix;
         this.queueCapacity = queueCapacity;
         this.idleSpinLimit = idleSpinLimit;
         this.backpressureSpinLimit = backpressureSpinLimit;
         this.backpressureParkNanos = backpressureParkNanos;
+        this.config = Objects.requireNonNull(config, "config");
         this.workers = new AtomicReferenceArray<>(laneCount);
     }
 
@@ -82,7 +87,8 @@ final class WorkerPool {
                     queueCapacity,
                     idleSpinLimit,
                     backpressureSpinLimit,
-                    backpressureParkNanos
+                    backpressureParkNanos,
+                    config
             );
             workers.set(lane, created);
             return created;

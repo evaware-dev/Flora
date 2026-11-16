@@ -3,11 +3,11 @@ package sweetie.evaware.flora.core;
 import sweetie.evaware.flora.api.Subscription;
 
 final class Registration<T> implements Subscription {
-    final FloraBus<T> bus;
+    final EventBus<T> bus;
     final Listener<T> listener;
     boolean active = true;
 
-    Registration(FloraBus<T> bus, Listener<T> listener) {
+    Registration(EventBus<T> bus, Listener<T> listener) {
         this.bus = bus;
         this.listener = listener;
     }

@@ -15,7 +15,7 @@ import org.openjdk.jmh.annotations.Warmup;
 import sweetie.evaware.flora.Flora;
 import sweetie.evaware.flora.api.DispatchMode;
 import sweetie.evaware.flora.api.Subscription;
-import sweetie.evaware.flora.core.FloraBus;
+import sweetie.evaware.flora.core.EventBus;
 import sweetie.evaware.flora.core.Listener;
 
 import java.util.concurrent.TimeUnit;
@@ -30,29 +30,29 @@ public class FloraDispatchJmhBenchmark {
     @Param({"0", "1", "8", "64", "200"})
     public int listeners;
 
-    private FloraBus<TestEvent> floraDirect;
-    private Subscription[] floraGlobalSubscriptions;
+    private EventBus<TestEvent> directBus;
+    private Subscription[] globalSubscriptions;
     private TestEvent event;
 
     @Setup
     public void setup() {
         event = new TestEvent();
 
-        floraDirect = new FloraBus<>();
+        directBus = new EventBus<>();
         for (int i = 0; i < listeners; i++) {
-            floraDirect.subscribe(new Listener<>(0, item -> item.value++, DispatchMode.SYNC));
+            directBus.subscribe(new Listener<>(0, item -> item.value++, DispatchMode.SYNC));
         }
 
-        floraGlobalSubscriptions = new Subscription[listeners];
+        globalSubscriptions = new Subscription[listeners];
         for (int i = 0; i < listeners; i++) {
-            floraGlobalSubscriptions[i] = Flora.getBus(TestEvent.class)
+            globalSubscriptions[i] = Flora.bus(TestEvent.class)
                     .subscribe(new Listener<>(0, item -> item.value++, DispatchMode.SYNC));
         }
     }
 
     @TearDown
     public void tearDown() {
-        for (Subscription subscription : floraGlobalSubscriptions) {
+        for (Subscription subscription : globalSubscriptions) {
             subscription.unsubscribe();
         }
     }
@@ -60,7 +60,7 @@ public class FloraDispatchJmhBenchmark {
     @Benchmark
     public int directPost() {
         event.value = 0;
-        floraDirect.post(event);
+        directBus.post(event);
         return event.value;
     }
 

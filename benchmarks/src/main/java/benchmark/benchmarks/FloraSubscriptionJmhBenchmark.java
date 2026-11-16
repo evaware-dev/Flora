@@ -13,7 +13,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 import sweetie.evaware.flora.api.DispatchMode;
 import sweetie.evaware.flora.api.Subscription;
-import sweetie.evaware.flora.core.FloraBus;
+import sweetie.evaware.flora.core.EventBus;
 import sweetie.evaware.flora.core.Listener;
 
 import java.util.ArrayList;
@@ -30,13 +30,13 @@ public class FloraSubscriptionJmhBenchmark {
     @Param({"1", "8", "64"})
     public int listeners;
 
-    private FloraBus<Object> bus;
+    private EventBus<Object> bus;
     private List<Listener<Object>> definitions;
     private Subscription[] subscriptions;
 
     @Setup
     public void setup() {
-        bus = new FloraBus<>();
+        bus = new EventBus<>();
         definitions = new ArrayList<>(listeners);
         subscriptions = new Subscription[listeners];
         for (int index = 0; index < listeners; index++) {

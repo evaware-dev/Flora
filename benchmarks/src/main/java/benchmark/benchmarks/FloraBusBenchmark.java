@@ -4,7 +4,7 @@ import benchmark.api.*;
 
 import sweetie.evaware.flora.Flora;
 import sweetie.evaware.flora.api.DispatchMode;
-import sweetie.evaware.flora.core.FloraBus;
+import sweetie.evaware.flora.core.EventBus;
 import sweetie.evaware.flora.core.Listener;
 
 public final class FloraBusBenchmark extends Benchmark<FloraBusBenchmark.FloraEvent> {
@@ -14,7 +14,7 @@ public final class FloraBusBenchmark extends Benchmark<FloraBusBenchmark.FloraEv
 
     @Override
     protected void setup(int listeners) {
-        FloraBus<FloraEvent> bus = Flora.getBus(FloraEvent.class);
+        EventBus<FloraEvent> bus = Flora.bus(FloraEvent.class);
         for (int i = 0; i < listeners; i++) {
             bus.subscribe(new Listener<>(0, this::consume, DispatchMode.SYNC));
         }

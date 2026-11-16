@@ -1,6 +1,7 @@
 package sweetie.evaware.flora.core;
 
-import sweetie.evaware.flora.FloraConfigurator;
+import sweetie.evaware.flora.Flora;
+import sweetie.evaware.flora.api.Config;
 import sweetie.evaware.flora.api.DispatchMode;
 import sweetie.evaware.flora.api.Subscription;
 import sweetie.evaware.flora.core.engine.DispatchEngine;
@@ -13,13 +14,14 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
-public class FloraBus<T> {
+public class EventBus<T> {
     private static final Consumer<?>[] EMPTY = new Consumer<?>[0];
     private static final Registration<?>[] EMPTY_REGS = new Registration<?>[0];
     private static final Subscription NOOP_SUBSCRIPTION = () -> {};
     private static final Comparator<Registration<?>> REGISTRATION_ORDER =
             (a, b) -> Integer.compare(b.listener.priority(), a.listener.priority());
 
+    private final Config config;
     private final DispatchEngine dispatchEngine;
     private final Runnable onChange;
     private int asynchronousLane = -1;
@@ -35,19 +37,24 @@ public class FloraBus<T> {
 
     private volatile Consumer<Throwable> exceptionHandler;
 
-    public FloraBus() {
-        this(DispatchEngine.defaultEngine(), null);
+    public EventBus() {
+        this(Flora.config(), DispatchEngine.defaultEngine(), null);
     }
 
-    public FloraBus(Runnable onChange) {
-        this(DispatchEngine.defaultEngine(), onChange);
+    public EventBus(Runnable onChange) {
+        this(Flora.config(), DispatchEngine.defaultEngine(), onChange);
     }
 
-    public FloraBus(DispatchEngine dispatchEngine) {
-        this(dispatchEngine, null);
+    public EventBus(DispatchEngine dispatchEngine) {
+        this(Flora.config(), dispatchEngine, null);
     }
 
-    public FloraBus(DispatchEngine dispatchEngine, Runnable onChange) {
+    public EventBus(DispatchEngine dispatchEngine, Runnable onChange) {
+        this(Flora.config(), dispatchEngine, onChange);
+    }
+
+    public EventBus(Config config, DispatchEngine dispatchEngine, Runnable onChange) {
+        this.config = Objects.requireNonNull(config, "config");
         this.dispatchEngine = Objects.requireNonNull(dispatchEngine, "dispatchEngine");
         this.onChange = onChange;
     }
@@ -60,12 +67,12 @@ public class FloraBus<T> {
             return event;
         }
 
-        final Predicate<Object> canceller = FloraConfigurator.getCanceller(event.getClass());
+        final Predicate<Object> canceller = config.canceller(event.getClass());
 
         if (len > 0) {
             final Consumer<Throwable> handler = this.exceptionHandler != null
                     ? this.exceptionHandler
-                    : FloraConfigurator.getExceptionHandler();
+                    : config.exceptionHandler();
             SyncDispatcher.dispatch(event, sync, len, canceller, handler);
         }
 
@@ -450,11 +457,11 @@ public class FloraBus<T> {
     }
 
     private static final class BatchSubscription<T> implements Subscription {
-        private final FloraBus<T> bus;
+        private final EventBus<T> bus;
         private final Registration<T>[] added;
         private boolean active = true;
 
-        BatchSubscription(FloraBus<T> bus, Registration<T>[] added) {
+        BatchSubscription(EventBus<T> bus, Registration<T>[] added) {
             this.bus = bus;
             this.added = added;
         }

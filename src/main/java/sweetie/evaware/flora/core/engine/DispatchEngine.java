@@ -1,5 +1,7 @@
 package sweetie.evaware.flora.core.engine;
 
+import sweetie.evaware.flora.Flora;
+import sweetie.evaware.flora.api.Config;
 import sweetie.evaware.flora.api.DispatchConfig;
 
 import java.util.Objects;
@@ -11,21 +13,25 @@ public final class DispatchEngine {
     private static final String ASYNC_THREAD_PREFIX = "Flora-Async-";
     private static final String PARALLEL_THREAD_PREFIX = "Flora-Parallel-";
     private static final long IDLE_POLL_NANOS = 100_000L;
-    private static final DispatchEngine DEFAULT_ENGINE = new DispatchEngine(DispatchConfig.defaults());
 
     private final WorkerPool asyncWorkers;
     private final WorkerPool parallelWorkers;
 
-    public DispatchEngine(DispatchConfig config) {
+    public DispatchEngine(DispatchConfig dispatchConfig) {
+        this(dispatchConfig, Flora.config());
+    }
+
+    public DispatchEngine(DispatchConfig dispatchConfig, Config config) {
+        Objects.requireNonNull(dispatchConfig, "dispatchConfig");
         Objects.requireNonNull(config, "config");
-        asyncWorkers = createPool(ASYNC_THREAD_PREFIX, config.asyncLaneCount(),
-                config.asyncQueueCapacity(), config);
-        parallelWorkers = createPool(PARALLEL_THREAD_PREFIX, config.parallelLaneCount(),
-                config.parallelQueueCapacity(), config);
+        asyncWorkers = createPool(ASYNC_THREAD_PREFIX, dispatchConfig.asyncLaneCount(),
+                dispatchConfig.asyncQueueCapacity(), dispatchConfig, config);
+        parallelWorkers = createPool(PARALLEL_THREAD_PREFIX, dispatchConfig.parallelLaneCount(),
+                dispatchConfig.parallelQueueCapacity(), dispatchConfig, config);
     }
 
     public static DispatchEngine defaultEngine() {
-        return DEFAULT_ENGINE;
+        return Flora.system().engine();
     }
 
     public int acquireAsyncLane() {
@@ -60,14 +66,16 @@ public final class DispatchEngine {
         return asyncWorkers.isIdle() && parallelWorkers.isIdle();
     }
 
-    private static WorkerPool createPool(String prefix, int lanes, int queueCapacity, DispatchConfig config) {
+    private static WorkerPool createPool(String prefix, int lanes, int queueCapacity,
+                                         DispatchConfig dispatchConfig, Config config) {
         return new WorkerPool(
                 prefix,
                 lanes,
                 queueCapacity,
-                config.idleSpinLimit(),
-                config.backpressureSpinLimit(),
-                config.backpressureParkNanos()
+                dispatchConfig.idleSpinLimit(),
+                dispatchConfig.backpressureSpinLimit(),
+                dispatchConfig.backpressureParkNanos(),
+                config
         );
     }
 }

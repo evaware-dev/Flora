@@ -2,8 +2,7 @@ package sweetie.evaware.flora.core.engine;
 
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
-import sweetie.evaware.flora.Flora;
-import sweetie.evaware.flora.FloraConfigurator;
+import sweetie.evaware.flora.api.Config;
 
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -22,7 +21,7 @@ class EventWorkerTest {
         int submissions = 250_000;
         AtomicInteger calls = new AtomicInteger();
         AtomicReference<Throwable> producerFailure = new AtomicReference<>();
-        EventWorker worker = new EventWorker("Flora-Saturation-Test", 64, 8, 4, 1_000L);
+        EventWorker worker = new EventWorker("Flora-Saturation-Test", 64, 8, 4, 1_000L, new Config());
         Thread producer = new Thread(() -> {
             try {
                 for (int index = 0; index < submissions; index++) {
@@ -53,7 +52,7 @@ class EventWorkerTest {
 
     @Test
     void shutdownDrainsClaimedAndQueuedWorkThenRejectsNewWork() throws Exception {
-        EventWorker worker = new EventWorker("Flora-Test", 16, 8, 4, 1_000L);
+        EventWorker worker = new EventWorker("Flora-Test", 16, 8, 4, 1_000L, new Config());
         AtomicInteger calls = new AtomicInteger();
         @SuppressWarnings("unchecked")
         Consumer<Object>[] listeners = new Consumer[]{ignored -> calls.incrementAndGet()};
@@ -73,7 +72,7 @@ class EventWorkerTest {
     void concurrentShutdownDoesNotLoseWork() throws Exception {
         int producersCount = 4;
         int operationsPerProducer = 10_000;
-        EventWorker worker = new EventWorker("Flora-Test", 64, 8, 4, 1_000L);
+        EventWorker worker = new EventWorker("Flora-Test", 64, 8, 4, 1_000L, new Config());
         AtomicInteger calls = new AtomicInteger();
         AtomicInteger accepted = new AtomicInteger();
         Thread[] producers = new Thread[producersCount];
@@ -111,9 +110,9 @@ class EventWorkerTest {
     @Test
     void assertionFailureDoesNotTerminateWorker() throws Exception {
         AtomicReference<Throwable> failure = new AtomicReference<>();
-        FloraConfigurator.setErrorHandler(failure::set);
+        Config config = new Config().exceptionHandler(failure::set);
 
-        EventWorker worker = new EventWorker("Flora-Test", 16, 8, 4, 1_000L);
+        EventWorker worker = new EventWorker("Flora-Test", 16, 8, 4, 1_000L, config);
         AtomicInteger calls = new AtomicInteger();
         AssertionError assertionFailure = new AssertionError("listener failure");
 
@@ -134,7 +133,7 @@ class EventWorkerTest {
             assertSame(assertionFailure, failure.get());
             assertEquals(1, calls.get());
         } finally {
-            FloraConfigurator.setErrorHandler(Throwable::printStackTrace);
+            worker.requestShutdown();
         }
     }
 }

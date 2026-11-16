@@ -81,7 +81,7 @@ class CancellationRegistrationTest {
 
     @Test
     void interfaceCancellationShortCircuits() {
-        FloraConfigurator.registerCancellation(MyCancellable.class, MyCancellable::isCancelled);
+        Flora.config().registerCancellation(MyCancellable.class, MyCancellable::isCancelled);
 
         ListenerWithShortCircuit listener = new ListenerWithShortCircuit();
         Flora.register(listener);
@@ -100,8 +100,9 @@ class CancellationRegistrationTest {
 
     @Test
     void specificClassCancellationAndCustomAnnotation() {
-        FloraConfigurator.registerCancellation(SpecificEvent.class, e -> e.stopped);
-        FloraConfigurator.registerAnnotation(CustomHandler.class);
+        Flora.config()
+                .registerCancellation(SpecificEvent.class, e -> e.stopped)
+                .registerAnnotation(CustomHandler.class);
 
         CustomAnnotationTarget target = new CustomAnnotationTarget();
         Flora.register(target);
@@ -123,7 +124,7 @@ class CancellationRegistrationTest {
 
     @Test
     void asyncListenersDoNotReceiveSynchronouslyCancelledEvent() {
-        FloraConfigurator.registerCancellation(MyCancellable.class, MyCancellable::isCancelled);
+        Flora.config().registerCancellation(MyCancellable.class, MyCancellable::isCancelled);
 
         List<String> asyncLog = new CopyOnWriteArrayList<>();
         var syncSub = Flora.subscribe(CustomCancellable.class, 100, DispatchMode.SYNC, CustomCancellable::cancel);

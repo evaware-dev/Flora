@@ -15,7 +15,7 @@ import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 import sweetie.evaware.flora.api.DispatchConfig;
 import sweetie.evaware.flora.api.DispatchMode;
-import sweetie.evaware.flora.core.FloraBus;
+import sweetie.evaware.flora.core.EventBus;
 import sweetie.evaware.flora.core.Listener;
 import sweetie.evaware.flora.core.engine.DispatchEngine;
 
@@ -29,13 +29,13 @@ import java.util.concurrent.TimeUnit;
 @Measurement(iterations = 5, time = 500, timeUnit = TimeUnit.MILLISECONDS)
 public class FloraAsyncJmhBenchmark {
     private DispatchEngine engine;
-    private FloraBus<Event> bus;
+    private EventBus<Event> bus;
     private Event event;
 
     @Setup(Level.Trial)
     public void setup() {
         engine = new DispatchEngine(DispatchConfig.defaults());
-        bus = new FloraBus<>(engine);
+        bus = new EventBus<>(engine);
         bus.subscribe(new Listener<>(0, ignored -> {
         }, DispatchMode.ASYNC));
         event = new Event();

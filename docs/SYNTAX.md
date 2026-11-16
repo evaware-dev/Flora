@@ -69,15 +69,15 @@ Flora.register(SecurityModule.class);
 Flora.unregister(SecurityModule.class);
 ```
 
-## Cancellation (`FloraConfigurator`)
+## Cancellation (`Config`)
 
 Register cancellation predicates dynamically for any class or interface without forced marker interfaces:
 
 ```java
-FloraConfigurator.registerCancellation(PlayerAttackEvent.class, PlayerAttackEvent::isCancelled);
+Flora.config().registerCancellation(PlayerAttackEvent.class, PlayerAttackEvent::isCancelled);
 
 // Or for an interface:
-FloraConfigurator.registerCancellation(Cancellable.class, Cancellable::isCancelled);
+Flora.config().registerCancellation(Cancellable.class, Cancellable::isCancelled);
 ```
 
 When cancelled, subsequent lower-priority listeners are short-circuited immediately.
@@ -86,29 +86,32 @@ When cancelled, subsequent lower-priority listeners are short-circuited immediat
 
 ```java
 // Register custom annotation
-FloraConfigurator.registerAnnotation(MyHandler.class);
+Flora.config().registerAnnotation(MyHandler.class);
 
 // Error handling
-FloraConfigurator.setErrorHandler(error -> logger.error("Dispatch error", error));
+Flora.config().exceptionHandler(error -> logger.error("Dispatch error", error));
 
 // Throw exceptions immediately
-FloraConfigurator.setFailFast(true);
+Flora.config().failFast(true);
 ```
 
-## Direct Bus & `@EventType`
+## Direct Bus
 
 ```java
-// Direct bus access
-FloraBus<UserLoginEvent> bus = Flora.getBus(UserLoginEvent.class);
+// Direct bus access (skips polymorphic hierarchy lookup)
+EventBus<UserLoginEvent> bus = Flora.bus(UserLoginEvent.class);
 bus.subscribe(event -> handle(event));
 bus.post(new UserLoginEvent("Alex"));
+```
 
-// Generated accessor (@EventType)
-@EventType
-public record UserLoginEvent(String username) {}
+## Isolated `EventSystem`
 
-UserLoginEventBus.post(new UserLoginEvent("Alex"));
-UserLoginEventBus.BUS.subscribe(event -> handle(event));
+```java
+EventSystem events = EventSystem.create();
+events.config().registerCancellation(PlayerAttackEvent.class, PlayerAttackEvent::isCancelled);
+events.subscribe(UserLoginEvent.class, event -> handle(event));
+events.post(new UserLoginEvent("Alex"));
+events.shutdown();
 ```
 
 ## Lifecycle & Shutdown
@@ -184,14 +187,14 @@ Flora.register(SecurityModule::class.java)
 Flora.unregister(SecurityModule::class.java)
 ```
 
-## Cancellation (`FloraConfigurator`)
+## Cancellation (`Config`)
 
 ```kotlin
-FloraConfigurator.registerCancellation(PlayerAttackEvent::class.java) { it.cancelled }
+Flora.config().registerCancellation(PlayerAttackEvent::class.java) { it.cancelled }
 
 // Reified helper
 inline fun <reified T : Any> registerCancellation(noinline predicate: (T) -> Boolean) {
-    FloraConfigurator.registerCancellation(T::class.java, predicate)
+    Flora.config().registerCancellation(T::class.java, predicate)
 }
 
 registerCancellation<PlayerAttackEvent> { it.cancelled }
@@ -209,14 +212,12 @@ Flora.subscribe(ChatMessageEvent::class.java) { event ->
 }
 ```
 
-## Direct Bus & `@EventType`
+## Direct Bus
 
 ```kotlin
-@EventType
-class UserLoginEvent(val username: String)
-
-UserLoginEventBus.post(UserLoginEvent("Alex"))
-UserLoginEventBus.BUS.subscribe { handle(it) }
+val loginBus = Flora.bus(UserLoginEvent::class.java)
+loginBus.subscribe { handle(it) }
+loginBus.post(UserLoginEvent("Alex"))
 ```
 
 ## Lifecycle & Shutdown
