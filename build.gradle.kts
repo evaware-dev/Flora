@@ -91,8 +91,8 @@ publishing {
                 githubProjectUrl?.let(url::set)
                 licenses {
                     license {
-                        name.set("GNU Lesser General Public License v3.0 only")
-                        url.set("https://www.gnu.org/licenses/lgpl-3.0.html")
+                        name.set("MIT License")
+                        url.set("https://opensource.org/licenses/MIT")
                         distribution.set("repo")
                     }
                 }
