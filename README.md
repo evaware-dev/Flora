@@ -1,17 +1,32 @@
-# Flora
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/banner-light.png">
+    <img alt="Flora" src="assets/banner-dark.png" height="72">
+  </picture>
 
-Ultra-high-performance, allocation-free event system for Java 17+ and Kotlin with deterministic priority dispatch, polymorphic hierarchy caching, annotations, and built-in lock-free ring-buffer async workers.
+  <p>Allocation-free event bus for Java 17+ and Kotlin with lock-free async ring buffers.</p>
+
+  <p>
+    <img alt="Java 17+" src="https://img.shields.io/badge/Java-17%2B-1f2328?style=flat&labelColor=0d1117">
+    <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-1f2328?style=flat&labelColor=0d1117"></a>
+  </p>
+</div>
 
 ## Features
 
-- **Zero-allocation synchronous hot paths**: Cache-friendly dispatch over prebuilt flat arrays (`Consumer<T>[]`) with no iterator, wrapper, or lambda allocations.
-- **Polymorphic dispatch**: Hierarchical listener resolution with `ClassValue` caching and lock-free per-event invalidation.
-- **Asynchronous ring-buffer workers**: Dedicated ordered `ASYNC` lanes and distributed `ASYNC_PARALLEL` worker pools with progressive backpressure and disruptor-style sequence management.
-- **Deterministic priorities**: Explicit execution ordering with synchronous short-circuit cancellation.
-- **Dynamic cancellation**: Flexible predicate registration via `Config` (`Flora.config()`) without mandatory marker interfaces.
-- **Isolated or global instances**: Use the global `Flora` facade or spin up isolated `EventSystem` instances with independent configuration and worker pools.
-- **Annotations & Lambdas**: Method handlers (`@Commando`) converted to direct JVM call sites via `LambdaMetafactory`, alongside type-safe lambda subscriptions.
-- **Pure Java 17+**: Zero external runtime dependencies.
+- **Zero-allocation sync dispatch**: flat `Consumer<T>[]` hot paths without iterator, wrapper, or lambda allocations.
+- **Polymorphic hierarchy caching**: `ClassValue`-backed listener resolution with lock-free per-event invalidation.
+- **Lock-free async ring buffers**: ordered `ASYNC` lanes and distributed `ASYNC_PARALLEL` worker pools with progressive backpressure.
+- **Priorities & cancellation**: deterministic ordering, short-circuit cancellation, and predicate registration via `Config` without marker interfaces.
+- **Annotations & lambdas**: `@Commando` methods bound directly via `LambdaMetafactory`, alongside type-safe lambda subscriptions.
+- **Global or isolated buses**: use the static facade or independent `EventSystem` instances with separate worker pools and no external runtime dependencies.
+
+## Async behavior
+
+- Queues are bounded; external producers wait for capacity, while posting from an async callback to a full queue throws `RejectedExecutionException` (in `ASYNC_PARALLEL`, earlier callbacks may already be enqueued).
+- Nonfatal callback and cancellation-predicate exceptions are routed to the system exception handler; failed cancellation checks skip the queued task and keep the worker running.
+- `VirtualMachineError` terminates the affected worker and closes its queue; per-bus exception handlers apply to synchronous listeners only.
 
 ## Installation
 
@@ -29,11 +44,6 @@ repositories {
     }
 }
 
-ext {
-    // See latest release: https://github.com/evaware-dev/Flora/releases
-    flora_version = 'VERSION'
-}
-
 dependencies {
     implementation "sweetie.evaware:flora:$flora_version"
 }
@@ -47,21 +57,16 @@ repositories {
     maven { url 'https://jitpack.io' }
 }
 
-ext {
-    // See latest release: https://github.com/evaware-dev/Flora/releases
-    flora_version = 'TAG'
-}
-
 dependencies {
     implementation "com.github.evaware-dev:Flora:$flora_version"
 }
 ```
 
-## Documentation & Examples
+Releases: [github.com/evaware-dev/Flora/releases](https://github.com/evaware-dev/Flora/releases)
 
-Async delivery uses bounded queues. External producers wait for space. Posting from an async callback to a full queue throws `RejectedExecutionException` instead of blocking a worker. With `ASYNC_PARALLEL`, some callbacks may already be queued when a later callback is rejected.
+## Documentation
 
-Nonfatal async callback and cancellation-predicate failures are reported to the system's exception handler; a failed cancellation check skips that queued task, and the worker continues. A `VirtualMachineError` terminates the affected worker and closes its queue to new submissions. A bus's local exception handler applies to synchronous listeners, including polymorphic delivery; async listeners use the system's handler.
+- [Syntax reference](docs/SYNTAX.md) — Java and Kotlin usage guide
+- [Example project](example/src/main/java/example/Main.java) — runnable sample (`./gradlew :example:run`)
 
-- **[docs/SYNTAX.md](docs/SYNTAX.md)**: complete syntax reference separated for **Java** and **Kotlin**.
-- **[example/](example/src/main/java/example/Main.java)**: runnable end-to-end sample application (`./gradlew :example:run`).
+[MIT License](LICENSE)
